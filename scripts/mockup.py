@@ -250,9 +250,54 @@ def render(theme, out, modal=False):
     print("wrote", out)
 
 
+def render_login(theme, out):
+    c = LIGHT if theme == "light" else DARK
+    img = Image.new("RGB", (W, H), c["canvas"])
+    d = ImageDraw.Draw(img)
+
+    cw, ch = 460, 470
+    x0, y0 = (W - cw) // 2, (H - ch) // 2 - 10
+    x1, y1 = x0 + cw, y0 + ch
+    rr(d, (x0 + 2, y0 + 6, x1 + 2, y1 + 6), 26, fill=c["hair"])
+    rr(d, (x0, y0, x1, y1), 26, fill=c["surface"], outline=c["hair"])
+
+    px = x0 + 30
+    rr(d, (px, y0 + 28, px + 38, y0 + 66), 11, fill=c["accent"])
+    text(d, (px + 19, y0 + 47), "1C", 13, True, c["accent_ink"], anchor="mm")
+    text(d, (px + 50, y0 + 38), "Écran Bleu", 14, True, c["ink"])
+    text(d, (px + 50, y0 + 55), "OneClick", 10, False, c["muted"])
+
+    text(d, (px, y0 + 94), "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ", 20, False, c["muted"])
+    d.line((x0, y0 + 116, x1, y0 + 116), fill=c["hair"], width=1)
+
+    text(d, (px, y0 + 158), "Bonjour", 26, True, c["ink"])
+    text(d, (px, y0 + 194), "Entrez votre mot de passe pour ouvrir la caisse.", 12, False, c["muted"])
+
+    text(d, (px, y0 + 240), "Mot de passe", 11, True, c["ink2"])
+    rr(d, (px, y0 + 258, x1 - 30, y0 + 310), 12, fill=c["surface"], outline=c["hair"])
+    text(d, (px + 16, y0 + 284), "••••••••", 13, False, c["muted"], anchor="lm")
+
+    rr(d, (px, y0 + 330, x1 - 30, y0 + 386), 14, fill=c["accent"])
+    text(d, ((px + x1 - 30) // 2, y0 + 358), "Entrer", 16, True, c["accent_ink"], anchor="mm")
+
+    d.line((x0 + 30, y0 + 412, x1 - 30, y0 + 412), fill=c["hair"], width=1)
+    rr(d, (px, y0 + 426, px + 168, y0 + 456), 10, fill=c["surface3"])
+    for i, code in enumerate(["FR", "ع", "EN"]):
+        sx = px + 6 + i * 54
+        if i == 0:
+            rr(d, (sx, y0 + 429, sx + 46, y0 + 453), 8, fill=c["surface"])
+        text(d, (sx + 23, y0 + 441), code, 10, True, c["ink"] if i == 0 else c["muted"], anchor="mm")
+    rr(d, (x1 - 30 - 74, y0 + 426, x1 - 30, y0 + 456), 10, fill=c["surface"], outline=c["hair"])
+    text(d, (x1 - 30 - 37, y0 + 441), "Jour", 10, True, c["ink"], anchor="mm")
+
+    img.save(out)
+    print("wrote", out)
+
+
 if __name__ == "__main__":
     outdir = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "docs/assets")
     outdir.mkdir(parents=True, exist_ok=True)
     render("light", outdir / "design-pos-light.png")
     render("dark", outdir / "design-pos-dark.png")
     render("light", outdir / "design-settings.png", modal=True)
+    render_login("light", outdir / "design-login.png")

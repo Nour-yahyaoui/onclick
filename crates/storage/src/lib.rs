@@ -194,6 +194,13 @@ impl User {
     }
 }
 
+/// The single shopkeeper account (identifiant unique, but the login form hides it).
+pub fn owner_name(conn: &Connection) -> Result<Option<String>> {
+    Ok(conn
+        .query_row("SELECT name FROM users ORDER BY created_at LIMIT 1", [], |r| r.get(0))
+        .optional()?)
+}
+
 pub fn has_users(conn: &Connection) -> Result<bool> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))?;
     Ok(n > 0)

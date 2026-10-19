@@ -164,6 +164,7 @@ If the build stops again, paste the error: it will be a concrete API detail, not
 
 | Version | What landed |
 |---|---|
+| **v0.5.4** | Sign-in card redesigned (password only, brand, language/theme in the footer); setup uses the same card; unused-variable warning fixed (#3) |
 | **v0.5.3** | Width caps, settings modal, toasts, retry button |
 | **v0.5.2** | Persistent sidebar (quick sell, search, sales, debts, menu) + sales day-book page |
 | **v0.5.1** | Visual rebuild: new light/dark palette (warm paper / deep slate), no side rail, Bismillah moved under the app bar, two-column POS, new cart panel — see `docs/assets/design-pos-{light,dark}.png` |

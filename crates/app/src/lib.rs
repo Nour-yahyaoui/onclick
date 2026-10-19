@@ -150,6 +150,7 @@ fn back(request: &HeaderMap) -> String {
 fn failure(lang: Lang, err: anyhow::Error) -> Response {
     eprintln!("[erreur] {err:#}");
     let body = html! {
+        (ui::auth_bismillah())
         h1 { "Une erreur est survenue" }
         p { "Rien n'est perdu : vos ventes sont enregistrées." }
         p.muted { "Appuyez sur « Réessayer ». Si cela continue, appelez l'assistance." }
@@ -1106,9 +1107,9 @@ async fn receipt_page(
 ) -> Response {
     let lang = lang_of(&headers);
     let conn = state.db.lock().unwrap();
-    let Some(user) = user_of(&conn, &headers) else {
+    if user_of(&conn, &headers).is_none() {
         return Redirect::to("/login").into_response();
-    };
+    }
 
     let result = (|| -> Result<Markup> {
         let receipt = storage::receipt(&conn, &path.id)?;
@@ -1381,38 +1382,52 @@ async fn setup_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
     drop(conn);
 
     let body = html! {
-        h1 { (ui::t(lang, "setup.title")) }
-        p { (ui::t(lang, "setup.intro")) }
+        (ui::auth_brand(""))
+        (ui::auth_bismillah())
 
-        div style="display:flex;gap:.5rem;margin-block-end:1rem" {
-            @for l in Lang::ALL {
-                a.btn.btn-ghost href=(format!("/lang/{}", l.code())) { (l.label()) }
-            }
-        }
+        h1 { (ui::t(lang, "setup.title")) }
+        p.muted { (ui::t(lang, "setup.intro")) }
 
         form method="post" action="/setup" {
             label for="shop_name" { (ui::t(lang, "setup.shop")) }
-            input type="text" id="shop_name" name="shop_name" autofocus;
+            input type="text" id="shop_name" name="shop_name" autofocus
+                  autocomplete="organization" placeholder="Écran Bleu";
 
             label { (ui::t(lang, "setup.vat")) }
-            div style="display:grid;gap:.35rem" {
-                label style="font-weight:400" {
-                    input type="radio" name="vat" value="no" checked; " " (ui::t(lang, "setup.vat_no"))
+            div.choices {
+                label.choice {
+                    input type="radio" name="vat" value="no" checked;
+                    span { (ui::t(lang, "setup.vat_no")) }
                 }
-                label style="font-weight:400" {
-                    input type="radio" name="vat" value="single"; " " (ui::t(lang, "setup.vat_single"))
+                label.choice {
+                    input type="radio" name="vat" value="single";
+                    span { (ui::t(lang, "setup.vat_single")) }
                 }
-                label style="font-weight:400" {
-                    input type="radio" name="vat" value="per_product"; " " (ui::t(lang, "setup.vat_per_product"))
+                label.choice {
+                    input type="radio" name="vat" value="per_product";
+                    span { (ui::t(lang, "setup.vat_per_product")) }
                 }
             }
 
             label for="password" { (ui::t(lang, "setup.password")) }
-            input type="password" id="password" name="password" required minlength="6";
+            input type="password" id="password" name="password" required minlength="6"
+                  autocomplete="new-password" placeholder="••••••••";
 
             button.btn.btn-primary.btn-block.btn-lg type="submit" {
                 (ui::t(lang, "setup.start"))
             }
+        }
+
+        div.auth-foot {
+            div.seg {
+                @for l in Lang::ALL {
+                    a.seg-item href=(format!("/lang/{}", l.code()))
+                        class=(if l == lang { "seg-item active" } else { "seg-item" }) {
+                        (l.code().to_uppercase())
+                    }
+                }
+            }
+            a.btn.btn-ghost href="/theme" { (ui::t(lang, "theme.toggle")) }
         }
     };
 
@@ -1499,35 +1514,47 @@ async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
     if !storage::has_users(&conn).unwrap_or(false) {
         return Redirect::to("/setup").into_response();
     }
+
+    let shop = shop_name(&conn);
+    let owner = storage::owner_name(&conn).unwrap_or(None).unwrap_or_else(|| "Patron".into());
     drop(conn);
 
     let body = html! {
+        (ui::auth_brand(&shop))
+        (ui::auth_bismillah())
+
         h1 { (ui::t(lang, "login.title")) }
+        p.muted { (ui::t(lang, "login.hint")) }
+
         form method="post" action="/login" {
-            label for="name" { (ui::t(lang, "login.user")) }
-            input type="text" id="name" name="name" value="Patron" autofocus;
+            input type="hidden" name="name" value=(owner);
 
             label for="password" { (ui::t(lang, "login.password")) }
-            input type="password" id="password" name="password" required;
+            input type="password" id="password" name="password"
+                  required autofocus autocomplete="current-password"
+                  placeholder="••••••••";
 
             button.btn.btn-primary.btn-block.btn-lg type="submit" {
                 (ui::t(lang, "login.enter"))
             }
         }
-        div.muted style="margin-block-start:1rem" {
-            @for l in Lang::ALL {
-                a.btn.btn-ghost href=(format!("/lang/{}", l.code())) { (l.label()) }
+
+        div.auth-foot {
+            div.seg {
+                @for l in Lang::ALL {
+                    a.seg-item href=(format!("/lang/{}", l.code()))
+                        class=(if l == lang { "seg-item active" } else { "seg-item" }) {
+                        (l.code().to_uppercase())
+                    }
+                }
+            }
+            a.icon-btn href="/theme" title=(ui::t(lang, "theme.toggle")) {
+                (ui::t(lang, "theme.short"))
             }
         }
     };
 
-    page_response(ui::auth_page(lang, theme_of(&headers), "Entrer", body))
-}
-
-#[derive(Deserialize)]
-struct LoginForm {
-    name: Option<String>,
-    password: String,
+    page_response(ui::auth_page(lang, theme_of(&headers), ui::t(lang, "login.enter"), body))
 }
 
 async fn login_submit(

@@ -1010,6 +1010,66 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
 }
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-block-end: 14px;
+}
+
+.auth h1 {
+  font-size: 1.7rem;
+  letter-spacing: -0.025em;
+  margin-block: 0 .25rem;
+}
+.auth > p.muted {
+  margin-block: 0 .35rem 1rem;
+  font-size: .95rem;
+}
+.auth form { margin-block-start: 1.1rem; }
+.auth form .btn-lg { margin-block-start: 1.1rem; }
+
+/* radio choices as tappable rows, not tiny dots */
+.choices { display: grid; gap: 8px; margin-block-start: 6px; }
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 46px;
+  padding: .5rem .8rem;
+  margin: 0;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.choice:hover { border-color: var(--hair-strong); background: var(--surface-2); }
+.choice input[type="radio"] {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+.choice:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  font-weight: 650;
+}
+
+.auth-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 18px;
+  padding-block-start: 14px;
+  border-block-start: 1px solid var(--hair);
+}
+.auth-foot .seg { margin-inline-end: auto; }
+
 .auth .bismillah { color: var(--muted); }
 .wrap .auth { margin-inline: auto; }
 
