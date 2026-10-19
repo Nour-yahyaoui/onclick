@@ -1,0 +1,30 @@
+[package]
+name = "store"
+version = "0.1.0"
+edition = "2021"
+description = "NovaShop — local-first shop management (single binary)"
+license = "proprietary"
+default-run = "store"
+
+[[bin]]
+name = "store"
+path = "src/main.rs"
+
+[workspace]
+resolver = "2"
+members = ["crates/domain", "crates/storage", "crates/ui", "crates/app"]
+default-members = ["crates/domain", "crates/storage", "crates/ui", "crates/app"]
+
+[dependencies]
+app = { path = "crates/app" }
+storage = { path = "crates/storage" }
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# Release profile: single small binary, no debug info.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

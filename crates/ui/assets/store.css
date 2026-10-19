@@ -1,0 +1,312 @@
+/* ==========================================================================
+   NovaShop — one stylesheet, two themes, RTL-safe (DESIGN-001 / DESIGN-003)
+   Logical properties only: no left/right, so Arabic mirrors for free.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --brand-green: #41B14B;
+  --brand-green-deep: #1E8E3E;
+  --brand-red: #FE2914;
+  --brand-red-deep: #C62212;
+  --brand-blue: #1B6EF3;
+
+  --bg: #F1F1F1;
+  --surface: #FFFFFF;
+  --surface-2: #FAFAFA;
+  --rail: #0B0F14;
+  --rail-fg: #F2F4F6;
+
+  --text: #12161B;
+  --text-muted: #5B6672;
+  --border: #E4E4E4;
+
+  --primary-bg: var(--brand-green);
+  --primary-fg: #0B0F14;          /* dark text on green = 6.97:1 (AA) */
+  --danger-bg: var(--brand-red-deep);
+  --danger-fg: #FFFFFF;
+  --money-bg: var(--brand-red);
+  --money-fg: #0B0F14;
+
+  --focus: #1B6EF3;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgb(0 0 0 / .06);
+
+  --fs-body: 16px;
+  --fs-label: 1rem;
+  --fs-money: 1.375rem;
+  --fs-total: 2rem;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand-green: #22B866;
+  --brand-green-deep: #17A65A;
+  --brand-red: #FF4B36;
+  --brand-red-deep: #D93A24;
+
+  --bg: #0E1116;
+  --surface: #161B22;
+  --surface-2: #1C232C;
+  --rail: #0A0D11;
+  --rail-fg: #E6EAEF;
+
+  --text: #E9EDF2;
+  --text-muted: #9AA5B1;
+  --border: #2A323D;
+
+  --primary-bg: var(--brand-green);
+  --primary-fg: #08130C;          /* 7.32:1 on dark-mode green */
+  --money-bg: var(--brand-red);
+  --money-fg: #0B0F14;
+
+  --focus: #6EA8FF;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Cairo", "Noto Naskh Arabic", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+}
+
+:lang(ar), [dir="rtl"] { line-height: 1.75; }
+
+a { color: inherit; }
+
+/* ── Focus: always visible, never removed ───────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Masthead: Bismillah (DESIGN-002 §6) ────────────────────────────────── */
+.bismillah {
+  font-family: "Amiri", "Noto Naskh Arabic", "Traditional Arabic", serif;
+  font-size: clamp(22px, 3.2vw, 38px);
+  line-height: 1.9;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--brand-green-deep);
+  padding: 0.75rem 1rem 0.25rem;
+  font-feature-settings: "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+}
+[data-theme="dark"] .bismillah { color: var(--brand-green); opacity: .85; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--brand-green);
+  color: var(--primary-fg);
+  padding: 0.6rem 1rem;
+  border-end-start-radius: var(--radius);
+  border-end-end-radius: var(--radius);
+}
+.header .brand { font-weight: 700; font-size: 1.125rem; }
+.header .shop { opacity: .75; font-size: .95rem; }
+.header .spacer { flex: 1; }
+.header .who { font-size: .95rem; opacity: .85; }
+
+.nav {
+  display: flex;
+  gap: .25rem;
+  flex-wrap: wrap;
+  padding: .5rem 1rem;
+  background: var(--surface);
+  border-block-end: 1px solid var(--border);
+}
+.nav a {
+  text-decoration: none;
+  padding: .55rem .9rem;         /* ≥44px tall with line-height */
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.nav a:hover { background: var(--surface-2); color: var(--text); }
+.nav a.active { background: var(--rail); color: var(--rail-fg); }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.wrap { padding: 1rem; max-width: 1500px; margin-inline: auto; }
+
+.pos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .pos { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-pad { padding: 1rem; }
+
+h1 { font-size: 1.375rem; margin: 0 0 .75rem; }
+h2 { font-size: 1.0625rem; margin: 0 0 .5rem; }
+.muted { color: var(--text-muted); font-size: .925rem; }
+
+/* ── Inputs ─────────────────────────────────────────────────────────────── */
+.scan {
+  display: flex; gap: .5rem; margin-block-end: .75rem;
+}
+input[type="text"], input[type="password"], input[type="search"], input[type="number"], select {
+  inline-size: 100%;
+  min-height: 48px;
+  padding: .6rem .8rem;
+  font-size: 1.0625rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+input[dir="ltr"] { text-align: start; }   /* barcodes/money never mirror */
+
+label { display: block; font-weight: 600; font-size: .95rem; margin-block: .5rem .25rem; }
+
+/* ── Buttons: one primary per screen (DESIGN-002 R1) ────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 48px; padding: .6rem 1.1rem;
+  font-family: inherit; font-size: 1.0625rem; font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--surface-2); color: var(--text);
+  cursor: pointer; text-decoration: none;
+}
+.btn:hover { filter: brightness(.97); }
+.btn-primary { background: var(--primary-bg); color: var(--primary-fg); border-color: transparent; }
+.btn-danger  { background: var(--danger-bg);  color: var(--danger-fg); }
+.btn-ghost   { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-block   { inline-size: 100%; }
+.btn-lg      { min-height: 60px; font-size: 1.1875rem; }
+
+/* ── Product grid ───────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: .75rem;
+}
+.product {
+  display: flex; flex-direction: column; gap: .35rem;
+  padding: .6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: start;
+  cursor: pointer;
+  font: inherit; color: inherit;
+  min-height: 120px;
+}
+.product:hover { border-color: var(--brand-green); }
+.product .thumb {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--surface-2), var(--bg));
+  display: grid; place-items: center;
+  font-size: 1.75rem; font-weight: 700; color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.product .name { font-weight: 650; font-size: .98rem; line-height: 1.35; }
+.product .price { font-variant-numeric: tabular-nums; font-weight: 700; }
+.product .stock { font-size: .82rem; color: var(--text-muted); }
+.product .stock.low { color: var(--brand-red-deep); font-weight: 700; }
+
+/* ── Cart ───────────────────────────────────────────────────────────────── */
+.cart-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem .75rem;
+  padding-block: .6rem;
+  border-block-end: 1px solid var(--border);
+}
+.cart-line .title { font-weight: 650; }
+.stepper { display: flex; align-items: center; gap: .35rem; }
+.stepper button {
+  inline-size: 44px; block-size: 44px;
+  font-size: 1.25rem; font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  cursor: pointer;
+}
+.stepper .qty { min-inline-size: 2ch; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.money { font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; }
+.money-cell { text-align: end; font-variant-numeric: tabular-nums; }
+
+.totals { margin-block-start: .75rem; }
+.totals .row { display: flex; justify-content: space-between; padding-block: .2rem; }
+.totals .grand {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-block-start: .5rem; padding: .75rem 1rem;
+  background: var(--money-bg); color: var(--money-fg);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-total); font-weight: 800;
+}
+.totals .grand .money { color: inherit; }
+
+.cart-empty { padding: 1.5rem .5rem; text-align: center; color: var(--text-muted); }
+
+/* ── Tables (products, carnet) ──────────────────────────────────────────── */
+table.list { inline-size: 100%; border-collapse: collapse; }
+table.list th {
+  text-align: start; font-size: .85rem; text-transform: none;
+  color: var(--text-muted); font-weight: 700;
+  padding: .5rem .6rem; border-block-end: 1px solid var(--border);
+}
+table.list td { padding: .6rem; border-block-end: 1px solid var(--border); }
+table.list tr:last-child td { border-block-end: 0; }
+
+/* ── Banners / messages (DESIGN-003 §8: say what to do) ─────────────────── */
+.banner {
+  padding: .75rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  margin-block-end: 1rem;
+}
+.banner.ok    { border-color: var(--brand-green); background: color-mix(in srgb, var(--brand-green) 12%, var(--surface)); }
+.banner.warn  { border-color: var(--brand-red-deep); background: color-mix(in srgb, var(--brand-red) 10%, var(--surface)); }
+.banner strong { display: block; margin-block-end: .15rem; }
+
+/* ── Simple auth screens ────────────────────────────────────────────────── */
+.auth {
+  max-inline-size: 420px;
+  margin: 4vh auto;
+  padding: 1.25rem;
+}
+.auth .btn { inline-size: 100%; margin-block-start: 1rem; }
+
+/* ── Print: receipts / lists stay readable ──────────────────────────────── */
+@media print {
+  .header, .nav, .btn, .scan { display: none !important; }
+  body { background: #fff; }
+  .card { border: 0; box-shadow: none; }
+}
+
+/* Respect reduced motion (nothing animates anyway — DESIGN-002 R10) */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

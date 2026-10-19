@@ -1,0 +1,9 @@
+[package]
+name = "ui"
+version = "0.1.0"
+edition = "2021"
+description = "maud components, i18n, layout. No .html files (ADR-014)."
+
+[dependencies]
+domain = { path = "../domain" }
+maud = "0.26"

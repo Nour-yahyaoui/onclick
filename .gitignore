@@ -1,0 +1,30 @@
+# ── Secrets: never commit ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+licence_private*
+keyring*
+*.db
+*.db-wal
+*.db-shm
+
+# ── Local data / runtime ───────────────────────────────────────────────
+data/
+/dist/
+/target/
+node_modules/
+.next/
+.vercel/
+out/
+build/
+coverage/
+
+# ── Tooling ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.swp
