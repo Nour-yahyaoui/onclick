@@ -1,6 +1,6 @@
 [package]
 name = "store"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "NovaShop — local-first shop management (single binary)"
 license = "proprietary"
@@ -13,13 +13,15 @@ path = "src/main.rs"
 [workspace]
 resolver = "2"
 members = ["crates/domain", "crates/storage", "crates/ui", "crates/app"]
-default-members = ["crates/domain", "crates/storage", "crates/ui", "crates/app"]
+# `crates/control` declares its own [workspace]: it is built separately and
+# must never block `cargo run` for the till.
+exclude = ["crates/control"]
 
 [dependencies]
 app = { path = "crates/app" }
 storage = { path = "crates/storage" }
 anyhow = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 
 # Release profile: single small binary, no debug info.
 [profile.release]

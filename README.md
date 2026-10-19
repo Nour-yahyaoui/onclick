@@ -54,8 +54,15 @@ Known shortcuts in this version, stated plainly:
 Requires **Rust stable 1.79+** and nothing else (no Node, no database server).
 
 ```bash
+# Run these from the repository root (the folder containing Cargo.toml):
 cargo run                # build + start on http://127.0.0.1:8642
+cargo run -p store       # explicit, identical
 ```
+
+> Do **not** run `cargo run` inside `src/` — Cargo looks for `Cargo.toml` in the
+> current directory and its parents, and `src/` has none of its own.
+> `crates/control` is a **separate workspace** (the cloud half): build it with
+> `cargo run` from inside `crates/control`, never from the root.
 
 The browser opens manually — go to the URL printed in the console.
 First launch shows the setup screen: language → shop name → VAT question → password. Then you can sell.
