@@ -41,3 +41,21 @@ jobs:
 
       - name: Doctor smoke test
         run: cargo run -- --doctor
+
+  control-plane:
+    name: control-plane (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/control -> target"
+      # Separate workspace: checked but never blocks the till build.
+      - name: Build control plane
+        run: cargo build
+        working-directory: crates/control

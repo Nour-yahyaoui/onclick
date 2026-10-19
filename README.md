@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. »
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-This repository is currently at **v0.1 — first working slice**.
+This repository is currently at **v0.2 — the till is usable for a day; the cloud half runs with `DATABASE_URL`**.
 
 ---
 
@@ -25,17 +25,31 @@ This repository is currently at **v0.1 — first working slice**.
 | Stock ledger + product version bump on every sale | ✅ |
 | **Debts / carnet**: credit sales, balances, collect a payment (ADR-010) | ✅ |
 | **Audit**: every product/sale/payment/settings change written to `audit_events` (ADR-011) | ✅ |
+| **Product edit + archive** (soft delete, audited) | ✅ |
+| **Audit everywhere**: setup, login, login-failure, logout, product create/edit/archive, sale, debt collect, write-off, settings | ✅ |
+| **« Qui a fait quoi »** journal screen (last 200 actions) | ✅ |
+| **Cash session**: open with float → close with counted cash → expected vs counted vs difference (Z report) | ✅ |
+| **Printable receipt** after every sale (browser print, no driver) | ✅ |
+| **Free debt** ("Ahmed took 500") and **write-off to loss** | ✅ |
+| **Cloud control plane** (separate crate): pairing, lease stub, sync ingest, read-only dashboard, `/health` | ✅ |
 | `--doctor` self-check, `/health` endpoint | ✅ |
 | Money as `i64` millimes, 3 decimals, never floats | ✅ |
 | Unit tests for money formatting/parsing, cart maths, margins, VAT | ✅ |
 
 ### Not yet (tracked in `PLAN.md` §14)
 
-SQLCipher encryption at rest (M0) · batches/lots + IMEI units (P1) · images · supplier deliveries · tranches/schedules · dashboard & charts · sync + control plane · AI assistant · receipts printing · CSV import · EAN check digits · htmx partial swaps (v0.1 uses plain form posts, which are already ~1–3 ms).
+SQLCipher encryption at rest (M0) · batches/lots + IMEI units (P1) · product images · supplier deliveries · instalment schedules & aging · charts/dashboard · **exe → control-plane sync client** · AI assistant · ESC/POS thermal printing · CSV/Excel import · EAN check digits · roles & cashier PINs · CSRF/rate-limiting hardening · htmx partial swaps.
+
+Known shortcuts in this version, stated plainly:
+
+* **SQLite is not encrypted yet** — `--doctor` says so out loud.
+* **Roles are not enforced** (single "Patron" user; every screen is reachable).
+* **Lease tokens are not signed yet** — `/api/licence/lease` returns `signed:false` so the client can refuse it.
+* **The exe does not sync yet** — the endpoint exists and is tested by hand; the agent inside `store.exe` is M5.
 
 ---
 
-## Build & run
+## Build & run — the till (offline)
 
 Requires **Rust stable 1.79+** and nothing else (no Node, no database server).
 
@@ -54,6 +68,25 @@ cargo build --release    # store.exe in target/release/
 ```
 
 Data lives in `./data/store.db` (WAL). Delete that folder to start over.
+
+## Build & run — the cloud half (optional)
+
+It is a **separate crate with its own workspace**, so the till always builds even if this one does not.
+
+```bash
+cd crates/control
+cp ../../deploy/control-plane.env.example .env   # then set DATABASE_URL to your Neon string
+cargo run                                        # http://localhost:8080
+```
+
+First run against an empty Neon database:
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -f deploy/cloud/0001_init.sql
+```
+
+Then open `http://localhost:8080` — with no data it shows an empty dashboard; `/health` reports `db=up|down`.
+Endpoints: `POST /api/device/pair`, `POST /api/licence/lease`, `POST /api/sync/ingest` (device token as `Authorization: Bearer …`).
 
 > **Windows note:** `x86_64-pc-windows-msvc` builds need the MSVC linker (Visual Studio Build Tools). The static-CRT / single-exe packaging work is M7; today the release binary still links the system CRT.
 

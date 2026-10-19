@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
-    routing::get,
+    routing::{get, post},
     Form, Router,
 };
 use domain::{format_money, parse_money};
@@ -64,12 +64,21 @@ pub fn routes(state: AppState) -> Router {
         .route("/lang/{code}", get(set_lang))
         .route("/products", get(products_page))
         .route("/products/new", get(product_new_page).post(product_create))
+        .route("/products/{id}/edit", get(product_edit_page).post(product_update))
+        .route("/products/{id}/archive", post(product_archive))
+        .route("/journal", get(journal_page))
+        .route("/session", get(session_page))
+        .route("/session/open", post(session_open))
+        .route("/session/close", post(session_close))
+        .route("/receipt/{id}", get(receipt_page))
         .route("/cart/add", post(cart_add))
         .route("/cart/qty", post(cart_qty))
         .route("/cart/price", post(cart_price))
         .route("/checkout", post(checkout))
         .route("/carnet", get(carnet_page))
         .route("/carnet/collect", post(carnet_collect))
+        .route("/carnet/new", post(carnet_new))
+        .route("/carnet/writeoff", post(carnet_writeoff))
         .route("/settings", get(settings_page).post(settings_save))
         .route("/assets/store.css", get(stylesheet))
         .route("/health", get(health))
@@ -215,6 +224,7 @@ fn render_index(
     let total: i64 = drafts.iter().map(|d| d.line_total).sum();
     let products = storage::list_products(conn, query)?;
     let (revenue, tickets) = storage::today_totals(conn)?;
+    let session = storage::current_session(conn)?;
 
     let body = html! {
         @if let Some(done) = done {
@@ -228,6 +238,12 @@ fn render_index(
         p.muted {
             (ui::t(lang, "pos.today")) ": " (ui::money_tnd(revenue))
             " · " (tickets) " " (ui::t(lang, "pos.tickets"))
+            " · "
+            @if let Some(session) = &session {
+                a href="/session" { "Caisse ouverte depuis " (session.opened_at.get(11..16).unwrap_or("")) }
+            } @else {
+                a href="/session" { "Caisse fermée — ouvrir" }
+            }
         }
 
         div.pos {
@@ -430,8 +446,11 @@ async fn checkout(
 
     let is_credit = matches!(payment, Payment::Credit { .. });
     match storage::checkout(&conn, &sid, &user, payment) {
-        Ok(_sale) => Redirect::to(if is_credit { "/carnet?done=1" } else { "/?done=sale" })
-            .into_response(),
+        // Straight to the ticket: the cashier hands it over or prints it.
+        Ok(sale) => {
+            let _ = is_credit;
+            Redirect::to(&format!("/receipt/{}", sale.id)).into_response()
+        }
         Err(err) => {
             if err.to_string().contains("empty_cart") {
                 Redirect::to("/").into_response()
@@ -485,6 +504,7 @@ async fn products_page(
                             th { (ui::t(lang, "products.barcode")) }
                             th.money-cell { (ui::t(lang, "common.price")) }
                             th.money-cell { (ui::t(lang, "common.stock")) }
+                            th { "" }
                         }
                     }
                     tbody {
@@ -494,6 +514,11 @@ async fn products_page(
                                 td.muted { (p.barcode.clone().unwrap_or_default()) }
                                 td.money-cell { (ui::money(p.price)) }
                                 td.money-cell { (p.stock) }
+                                td {
+                                    a.btn.btn-ghost href=(format!("/products/{}/edit", p.id)) {
+                                        "Modifier"
+                                    }
+                                }
                             }
                         }
                     }
@@ -584,6 +609,406 @@ async fn product_create(
 }
 
 // ---------------------------------------------------------------------------
+// Product edit / archive  (ADR-011: everything editable, everything attributed)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct IdPath {
+    id: String,
+}
+
+async fn product_edit_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let product = storage::get_product(&conn, &path.id)?;
+        let body = html! {
+            p { a href="/products" { "← " (ui::t(lang, "products.title")) } }
+            h1 { (product.name) }
+
+            form method="post" action=(format!("/products/{}/edit", product.id)) {
+                label for="name" { (ui::t(lang, "common.name")) }
+                input type="text" id="name" name="name" value=(product.name) required autofocus;
+
+                label for="barcode" { (ui::t(lang, "products.barcode")) }
+                input type="text" id="barcode" name="barcode" dir="ltr"
+                      value=(product.barcode.clone().unwrap_or_default());
+
+                label for="price" { (ui::t(lang, "common.price")) }
+                input type="text" id="price" name="price" dir="ltr" inputmode="decimal"
+                      value=(format_money(product.price));
+
+                label for="cost" { (ui::t(lang, "common.cost")) }
+                input type="text" id="cost" name="cost" dir="ltr" inputmode="decimal"
+                      value=(format_money(product.cost));
+
+                div.muted style="margin-block-start:.5rem" {
+                    (ui::t(lang, "common.stock")) ": " (product.stock)
+                }
+
+                button.btn.btn-primary.btn-block.btn-lg type="submit" style="margin-block-start:1rem" {
+                    (ui::t(lang, "common.save"))
+                }
+            }
+
+            form method="post" action=(format!("/products/{}/archive", product.id))
+                 style="margin-block-start:1.5rem" {
+                button.btn.btn-ghost.btn-block type="submit" {
+                    "Archiver ce produit"
+                }
+                p.muted { "Le produit disparaît des ventes. L'historique reste intact." }
+            }
+        };
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Products, 0, "Modifier un produit"),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+#[derive(Deserialize)]
+struct ProductEditForm {
+    name: String,
+    barcode: Option<String>,
+    price: Option<String>,
+    cost: Option<String>,
+}
+
+async fn product_update(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    Form(form): Form<ProductEditForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let price = form.price.as_deref().and_then(parse_money).unwrap_or(0);
+    let cost = form.cost.as_deref().and_then(parse_money).unwrap_or(0);
+    let barcode = form
+        .barcode
+        .map(|b| b.trim().to_string())
+        .filter(|b| !b.is_empty());
+
+    match storage::update_product(&conn, &user, &path.id, form.name.trim(), barcode, price, cost) {
+        Ok(()) => Redirect::to("/products").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn product_archive(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    match storage::archive_product(&conn, &user, &path.id, true) {
+        Ok(()) => Redirect::to("/products").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Journal — "Qui a fait quoi" (ADR-011 §5.2)
+// ---------------------------------------------------------------------------
+
+async fn journal_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let rows = storage::recent_audit(&conn, 200)?;
+        let body = html! {
+            h1 { "Qui a fait quoi" }
+            p.muted { "Les 200 dernières actions, de la plus récente à la plus ancienne." }
+
+            @if rows.is_empty() {
+                div.card.card-pad { (ui::empty_state("Rien à afficher pour l'instant.")) }
+            } @else {
+                div.card {
+                    table.list {
+                        thead {
+                            tr {
+                                th { "Quand" }
+                                th { "Qui" }
+                                th { "Quoi" }
+                            }
+                        }
+                        tbody {
+                            @for row in &rows {
+                                tr {
+                                    td.muted dir="ltr" { (row.at.get(0..16).unwrap_or(&row.at)) }
+                                    td {
+                                        strong { (row.actor) }
+                                        div.muted { (row.role) }
+                                    }
+                                    td { (row.summary) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Settings, 0, "Qui a fait quoi"),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cash session + Z report
+// ---------------------------------------------------------------------------
+
+async fn session_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let current = storage::current_session(&conn)?;
+        let last_report = match storage::last_closed_session(&conn)? {
+            Some(last) => Some(storage::session_totals(&conn, &last.id)?),
+            None => None,
+        };
+        let body = match &current {
+            Some(session) => {
+                let report = storage::session_totals(&conn, &session.id)?;
+                html! {
+                    h1 { "Caisse ouverte" }
+                    p.muted { "Ouverte le " (report.opened_at.get(0..16).unwrap_or(&report.opened_at)) }
+
+                    div.card.card-pad {
+                        table.list {
+                            tbody {
+                                tr { td { "Fond de caisse" } td.money-cell { (ui::money(report.opening_float)) } }
+                                tr { td { "Ventes espèces" } td.money-cell { (ui::money(report.cash_in)) } }
+                                tr { td { "Ventes carte" } td.money-cell { (ui::money(report.card_in)) } }
+                                tr { td { "Ventes à crédit" } td.money-cell { (ui::money(report.credit_out)) } }
+                                tr { td { "Dettes encaissées" } td.money-cell { (ui::money(report.collected)) } }
+                                tr { td { "Tickets" } td.money-cell { (report.tickets) } }
+                            }
+                        }
+                        div.totals {
+                            div.grand {
+                                span { "Attendu en caisse" }
+                                span.money { (format_money(report.expected_cash)) }
+                            }
+                        }
+                    }
+
+                    div.card.card-pad style="margin-block-start:1rem" {
+                        h2 { "Fermer la caisse (Z)" }
+                        form method="post" action="/session/close" {
+                            label for="counted" { "Montant compté dans le tiroir" }
+                            input type="text" id="counted" name="counted" dir="ltr"
+                                  inputmode="decimal" value=(format_money(report.expected_cash));
+                            button.btn.btn-primary.btn-block.btn-lg type="submit" style="margin-block-start:.75rem" {
+                                "Fermer la caisse"
+                            }
+                        }
+                    }
+                }
+            }
+            None => html! {
+                h1 { "Caisse fermée" }
+                p { "Ouvrez la caisse pour commencer la journée." }
+                form method="post" action="/session/open" {
+                    label for="float" { "Fond de caisse (espèces dans le tiroir)" }
+                    input type="text" id="float" name="float" dir="ltr" inputmode="decimal" value="0.000";
+                    button.btn.btn-primary.btn-block.btn-lg type="submit" style="margin-block-start:.75rem" {
+                        "Ouvrir la caisse"
+                    }
+                }
+
+                @if let Some(report) = last_report {
+                    div.card.card-pad style="margin-block-start:1.5rem" {
+                        h2 { "Dernier Z" }
+                        table.list {
+                            tbody {
+                                tr { td { "Attendu" } td.money-cell { (ui::money(report.expected_cash)) } }
+                                tr {
+                                    td { "Compté" }
+                                    td.money-cell { (ui::money(report.counted_cash.unwrap_or(0))) }
+                                }
+                                tr {
+                                    td { "Écart" }
+                                    td.money-cell { (ui::money(report.difference.unwrap_or(0))) }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        };
+        Ok(ui::page(&chrome(&conn, &headers, &user, Nav::Sell, 0, "Caisse"), body))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+#[derive(Deserialize)]
+struct OpenSessionForm {
+    float: Option<String>,
+}
+
+async fn session_open(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<OpenSessionForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let float = form.float.as_deref().and_then(parse_money).unwrap_or(0);
+    match storage::open_session(&conn, &user, float) {
+        Ok(_) => Redirect::to("/session").into_response(),
+        Err(err) => {
+            // Already open -> simply show the screen, never an error page.
+            if err.to_string().contains("already_open") {
+                Redirect::to("/session").into_response()
+            } else {
+                failure(lang, err)
+            }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct CloseSessionForm {
+    counted: Option<String>,
+}
+
+async fn session_close(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<CloseSessionForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let counted = form.counted.as_deref().and_then(parse_money).unwrap_or(0);
+    match storage::close_session(&conn, &user, counted) {
+        Ok(_) => Redirect::to("/session").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Receipt — printed by the browser (no driver needed in v0.2)
+// ---------------------------------------------------------------------------
+
+async fn receipt_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let receipt = storage::receipt(&conn, &path.id)?;
+        let shop = shop_name(&conn);
+        let body = html! {
+            div.auth style="max-inline-size:520px;margin:0 auto" {
+                div.card.card-pad {
+                    div style="text-align:center" {
+                        @if !shop.is_empty() { h2 { (shop) } }
+                        div.muted dir="ltr" { (receipt.created_at.get(0..16).unwrap_or(&receipt.created_at)) }
+                    }
+                    table.list style="margin-block-start:1rem" {
+                        thead {
+                            tr {
+                                th { "Article" }
+                                th.money-cell { "Qté" }
+                                th.money-cell { "Prix" }
+                                th.money-cell { "Total" }
+                            }
+                        }
+                        tbody {
+                            @for (name, qty, price, total) in &receipt.lines {
+                                tr {
+                                    td { (name) }
+                                    td.money-cell { (qty) }
+                                    td.money-cell { (ui::money(*price)) }
+                                    td.money-cell { (ui::money(*total)) }
+                                }
+                            }
+                        }
+                    }
+                    div.totals {
+                        div.grand {
+                            span { (ui::t(lang, "common.total")) }
+                            span.money { (format_money(receipt.total)) }
+                        }
+                        @if receipt.credit > 0 {
+                            div.row {
+                                span { (ui::t(lang, "pos.credit")) }
+                                span.money-cell { (ui::money(receipt.credit)) }
+                            }
+                        }
+                    }
+                    p.muted style="text-align:center;margin-block-start:1rem" {
+                        "Ticket " (receipt.number) " · " (receipt.seller)
+                    }
+                }
+                div style="display:flex;gap:.5rem;margin-block-start:1rem" {
+                    button.btn.btn-primary type="button" onclick="window.print()" { "Imprimer" }
+                    a.btn.btn-ghost href="/" { (ui::t(lang, "common.back")) }
+                }
+            }
+        };
+        Ok(ui::auth_page(lang, theme_of(&headers), "Ticket", body))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Carnet (debts)
 // ---------------------------------------------------------------------------
 
@@ -612,6 +1037,23 @@ async fn carnet_page(
             }
             h1 { (ui::t(lang, "carnet.title")) }
             p.muted { (ui::t(lang, "carnet.balance")) ": " (ui::money_tnd(total)) }
+
+            div.card.card-pad style="margin-block-end:1rem" {
+                h2 { "Ajouter une dette (sans vente)" }
+                form method="post" action="/carnet/new" {
+                    label for="name" { (ui::t(lang, "pos.debtor")) }
+                    input type="text" id="name" name="name" required;
+                    label for="phone" { (ui::t(lang, "pos.phone")) }
+                    input type="text" id="phone" name="phone" dir="ltr";
+                    label for="amount" { "Montant" }
+                    input type="text" id="amount" name="amount" dir="ltr" inputmode="decimal" required;
+                    label for="reason" { "Motif (optionnel)" }
+                    input type="text" id="reason" name="reason";
+                    button.btn.btn-primary.btn-block type="submit" style="margin-block-start:.5rem" {
+                        "Ajouter au carnet"
+                    }
+                }
+            }
 
             @if debts.is_empty() {
                 div.card.card-pad { (ui::empty_state(ui::t(lang, "carnet.empty"))) }
@@ -644,6 +1086,13 @@ async fn carnet_page(
                                                   value=(format_money(d.balance));
                                             button.btn.btn-primary type="submit" {
                                                 (ui::t(lang, "carnet.collect"))
+                                            }
+                                        }
+                                        form method="post" action="/carnet/writeoff" style="margin-block-start:.35rem" {
+                                            input type="hidden" name="debt_id" value=(d.id);
+                                            input type="hidden" name="reason" value="irrécouvrable";
+                                            button.btn.btn-ghost type="submit" style="min-height:36px;font-size:.9rem" {
+                                                "Passer en perte"
                                             }
                                         }
                                     }
@@ -684,6 +1133,65 @@ async fn carnet_collect(
     };
     let amount = parse_money(&form.amount).unwrap_or(0);
     match storage::collect(&conn, &form.debt_id, amount, "cash", &user) {
+        Ok(()) => Redirect::to("/carnet").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewDebtForm {
+    name: String,
+    phone: Option<String>,
+    amount: Option<String>,
+    reason: Option<String>,
+}
+
+async fn carnet_new(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<NewDebtForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let amount = form.amount.as_deref().and_then(parse_money).unwrap_or(0);
+    let phone = form
+        .phone
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+    match storage::create_debt(
+        &conn,
+        &user,
+        form.name.trim(),
+        phone,
+        amount,
+        form.reason.map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
+    ) {
+        Ok(_) => Redirect::to("/carnet").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+#[derive(Deserialize)]
+struct WriteOffForm {
+    debt_id: String,
+    reason: Option<String>,
+}
+
+async fn carnet_writeoff(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<WriteOffForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let reason = form.reason.unwrap_or_else(|| "irrécouvrable".to_string());
+    match storage::write_off_debt(&conn, &user, &form.debt_id, &reason) {
         Ok(()) => Redirect::to("/carnet").into_response(),
         Err(err) => failure(lang, err),
     }
@@ -790,6 +1298,16 @@ async fn setup_submit(
             storage::create_product(&conn, &owner, name, None, price, cost, 5)?;
         }
 
+        storage::audit(
+            &conn,
+            &owner,
+            "setup",
+            "settings",
+            "install",
+            "Première configuration du magasin",
+            None,
+            None,
+        )?;
         let sid = storage::start_session(&conn, &owner.id)?;
         let resp = Redirect::to("/").into_response();
         Ok(append_cookie(
@@ -853,11 +1371,36 @@ async fn login_submit(
 
     match storage::authenticate(&conn, name.trim(), &form.password) {
         Ok(Some(user)) => {
+            let _ = storage::audit(
+                &conn,
+                &user,
+                "login",
+                "user",
+                &user.id,
+                &format!("Connexion : {}", user.name),
+                None,
+                None,
+            );
             let sid = storage::start_session(&conn, &user.id).unwrap_or_default();
             let resp = Redirect::to("/").into_response();
             append_cookie(resp, &cookie_header("sid", &sid, 12 * 3600))
         }
         Ok(None) => {
+            let ghost = User {
+                id: "system".into(),
+                name: name.trim().to_string(),
+                role: "unknown".into(),
+            };
+            let _ = storage::audit(
+                &conn,
+                &ghost,
+                "login_fail",
+                "user",
+                "unknown",
+                "Mot de passe incorrect",
+                None,
+                None,
+            );
             let body = html! {
                 (ui::banner("warn", ui::t(lang, "login.error"), ""))
                 h1 { (ui::t(lang, "login.title")) }
@@ -883,6 +1426,9 @@ async fn login_submit(
 
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let conn = state.db.lock().unwrap();
+    if let Some(user) = user_of(&conn, &headers) {
+        let _ = storage::audit(&conn, &user, "logout", "user", &user.id, "Déconnexion", None, None);
+    }
     if let Some(sid) = cookie(&headers, "sid") {
         let _ = storage::end_session(&conn, &sid);
     }
@@ -942,6 +1488,13 @@ async fn settings_page(State(state): State<AppState>, headers: HeaderMap) -> Res
                     (ui::t(lang, "common.save"))
                 }
             }
+        }
+
+        div.card.card-pad style="margin-block-end:1rem" {
+            h2 { "Qui a fait quoi" }
+            p.muted { "Voir toutes les actions : ventes, modifications, encaissements." }
+            a.btn.btn-ghost href="/journal" { "Ouvrir le journal" }
+            a.btn.btn-ghost href="/session" { "Caisse / Z" }
         }
 
         div.card.card-pad {
