@@ -437,7 +437,7 @@ pub fn money_tnd(millimes: i64) -> Markup {
 
 pub fn banner(kind: &str, title: &str, text: &str) -> Markup {
     html! {
-        div.banner class=(kind) {
+        div class=(format!("banner {kind}")) {
             strong { (title) }
             span { (text) }
         }
@@ -471,7 +471,7 @@ pub fn product_card(product: &ProductView<'_>) -> Markup {
                 div.thumb { (initial) }
                 div.name { (product.name) }
                 div.price { (money(product.price)) }
-                div.stock class=[if low { "low" } else { "" }] {
+                div class=(if low { "stock low" } else { "stock" }) {
                     @if low { "Stock : 0" } @else { "Stock : " (product.stock) }
                 }
             }
