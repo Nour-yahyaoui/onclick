@@ -1,4 +1,4 @@
-//! NovaShop control plane — the cloud half (ADR-003).
+//! OneClick control plane — the cloud half (ADR-003).
 //!
 //! Small on purpose: pairing, leases, sync ingest and a read-only dashboard.
 //! It owns the only database credentials; the shop PC never sees them.
@@ -189,12 +189,12 @@ fn page(title: &str, body: Markup) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (title) " — NovaShop cloud" }
+                title { (title) " — OneClick cloud" }
                 style { (CSS) }
             }
             body {
                 header.header {
-                    span.brand { "NovaShop — cloud" }
+                    span.brand { "OneClick — cloud" }
                     span.spacer {}
                     a.btn.btn-ghost href="/health" { "état" }
                 }

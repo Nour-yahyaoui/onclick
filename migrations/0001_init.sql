@@ -1,5 +1,5 @@
 -- ============================================================================
---  NovaShop — schema v1 (first vertical slice)
+--  OneClick — schema v1 (first vertical slice)
 --  Everything editable, nothing anonymous (ADR-011).
 --  Money is INTEGER millimes everywhere (1 TND = 1000).
 -- ============================================================================

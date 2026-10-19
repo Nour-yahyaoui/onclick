@@ -9,7 +9,7 @@
 use domain::format_money;
 use maud::{html, Markup, DOCTYPE};
 
-pub const APP_NAME: &str = "NovaShop";
+pub const APP_NAME: &str = "OneClick";
 /// Rendered only through the Amiri/Noto Naskh stack (DESIGN-002 §6).
 pub const BISMILLAH: &str = "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ";
 

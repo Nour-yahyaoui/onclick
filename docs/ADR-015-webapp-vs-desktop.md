@@ -77,7 +77,7 @@ Tauri 2 is genuinely good, but for an app that already runs its own HTTP server 
 | Concern | How |
 |---|---|
 | Shopkeeper expects a double-clickable app | `store.exe --window` behaviour by default: start server → launch `msedge --app=http://127.0.0.1:8642 --window-size=1366,768` → **chrome-less window with your title and icon** |
-| Browser profile pollution | launch with a dedicated `--user-data-dir=%LOCALAPPDATA%\NovaShop\browser` → own history, no extensions, own zoom, no "restore pages" prompt |
+| Browser profile pollution | launch with a dedicated `--user-data-dir=%LOCALAPPDATA%\OneClick\browser` → own history, no extensions, own zoom, no "restore pages" prompt |
 | Accidental close | JS `beforeunload` guard *only* while a cart has items ("panier non enregistré") |
 | They closed the tab and think it crashed | the server keeps running; the desktop shortcut re-opens the window instantly; the tray-less design means **the port is the lock** (second launch just re-opens the UI) |
 | Kiosk / fullscreen | `--start-fullscreen` or `--kiosk` flag `settings.kiosk = true`, exit with a key combo + PIN |

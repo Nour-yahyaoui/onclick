@@ -38,7 +38,7 @@ Legend: **R** = required · **O** = optional (feature-gated) · **B** = build-ti
 |---|---|---|---|
 | `PAIRING_CODE_PEPPER` | **R** | 32 bytes base64 | HMAC for 6-digit pairing codes so a DB leak doesn't expose in-flight codes |
 | `DEVICE_TOKEN_PEPPER` | **R** | 32 bytes base64 | Device tokens are stored **hashed**; this pepper prevents offline brute force |
-| `TOTP_ISSUER` | O | `NovaShop` | Label shown in the owner's authenticator app (ADR/SEC-001 §3 2FA) |
+| `TOTP_ISSUER` | O | `OneClick` | Label shown in the owner's authenticator app (ADR/SEC-001 §3 2FA) |
 | `SESSION_IDLE_MINUTES` | O | `30` | Dashboard idle timeout (default 30) |
 | `MAX_CONCURRENT_SESSIONS` | O | `1` | ADR-003: one dashboard session, new login revokes the old |
 

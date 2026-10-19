@@ -1,8 +1,8 @@
 [package]
 name = "store"
-version = "0.2.0"
+version = "0.5.0"
 edition = "2021"
-description = "NovaShop — local-first shop management (single binary)"
+description = "OneClick — local-first shop management (single binary)"
 license = "proprietary"
 default-run = "store"
 

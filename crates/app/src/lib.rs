@@ -48,7 +48,7 @@ pub async fn serve(data_dir: PathBuf, port: u16) -> Result<()> {
 
     let addr = format!("127.0.0.1:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    println!("NovaShop prêt — http://{addr}");
+    println!("OneClick prêt — http://{addr}");
     println!("Données : {}", db_path.display());
     axum::serve(listener, app).await?;
     Ok(())
@@ -337,7 +337,7 @@ fn render_index(
         }
     };
 
-    Ok(ui::page(&chrome(conn, headers, user, Nav::Sell, drafts.len(), "NovaShop"), body))
+    Ok(ui::page(&chrome(conn, headers, user, Nav::Sell, drafts.len(), ui::t(lang, "nav.sell")), body))
 }
 
 // ---------------------------------------------------------------------------

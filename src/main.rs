@@ -56,7 +56,7 @@ fn main() -> Result<()> {
 
 fn print_help() {
     println!(
-        "NovaShop — caisse et gestion de magasin (local, hors ligne)\n\
+        "OneClick — caisse et gestion de magasin (local, hors ligne)\n\
          \n\
          store                 démarrer la caisse\n\
          store --port 9000     changer le port (défaut 8642)\n\
@@ -67,7 +67,7 @@ fn print_help() {
 
 fn doctor(data_dir: &PathBuf) -> Result<()> {
     let db_path = data_dir.join("store.db");
-    println!("NovaShop — diagnostic");
+    println!("OneClick — diagnostic");
     println!("dossier : {}", data_dir.display());
     println!("base    : {}", db_path.display());
 

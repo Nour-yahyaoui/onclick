@@ -1,5 +1,5 @@
 -- ============================================================================
---  NovaShop — schema v2
+--  OneClick — schema v2
 --  Cash sessions (drawer / Z report), sale↔session link, product archiving.
 -- ============================================================================
 

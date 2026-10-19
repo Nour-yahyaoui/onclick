@@ -1,71 +1,81 @@
-# NovaShop — caisse & gestion de magasin
+# OneClick — caisse & gestion de magasin
 
 Local-first POS for phone & accessories shops. **One binary, works offline, in French / Arabic / English.**
 
-> « Il enregistre tout, chaque dinar. Il n'exige rien. »
+> « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-This repository is currently at **v0.2 — the till is usable for a day; the cloud half runs with `DATABASE_URL`**.
+Current version: **v0.5** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
-## What works today (v0.1)
+## Status at a glance
 
-| Feature | Status |
+| Area | v0.5 |
 |---|---|
-| Single Rust binary, local HTTP server on `127.0.0.1:8642` | ✅ |
+| **Till (offline)** | ✅ usable for a day: sell, credit, debts, cash session, Z report, receipt, product edit/archive, audit journal |
+| **Cloud control plane** | ✅ runs standalone: pairing, lease stub, sync ingest, read-only dashboard, `/health` |
+| **Encryption at rest** | ⚠️ not yet (SQLCipher is next; `--doctor` says so out loud) |
+| **Roles / cashier PIN** | ⚠️ not yet — single "Patron" account |
+| **Batches, IMEI, images, deliveries** | ❌ the phone-shop stock layer is not built yet |
+| **Exe → cloud sync** | ❌ endpoints exist, the agent inside the exe does not |
+
+---
+
+## What works today (v0.5)
+
+| Feature | |
+|---|---|
+| Single Rust binary, local server on `127.0.0.1:8642`, no Node, no DB server | ✅ |
 | Server-rendered UI — **maud macros in `.rs` files, no `.html` anywhere** (ADR-014) | ✅ |
 | French / Arabic (RTL) / English, one tap to switch | ✅ |
 | Light + dark theme, persisted per device | ✅ |
 | Bismillah masthead (Amiri/naskh stack) on every page | ✅ |
-| First run: 3 questions → a working till with 6 sample products | ✅ |
-| Owner password (Argon2id), hashed sessions in SQLite | ✅ |
-| Products: create, search by name or barcode, opening stock | ✅ |
+| First run: 3 plain questions → a working till with 6 sample products | ✅ |
+| Owner password (Argon2id), session ids stored hashed | ✅ |
+| Products: create, **edit, archive**, search by name or barcode, opening stock | ✅ |
 | Sell: scan/type → cart → **price entered per line** (ADR-009) → cash / card / **credit** | ✅ |
-| Stock ledger + product version bump on every sale | ✅ |
-| **Debts / carnet**: credit sales, balances, collect a payment (ADR-010) | ✅ |
-| **Audit**: every product/sale/payment/settings change written to `audit_events` (ADR-011) | ✅ |
-| **Product edit + archive** (soft delete, audited) | ✅ |
-| **Audit everywhere**: setup, login, login-failure, logout, product create/edit/archive, sale, debt collect, write-off, settings | ✅ |
-| **« Qui a fait quoi »** journal screen (last 200 actions) | ✅ |
-| **Cash session**: open with float → close with counted cash → expected vs counted vs difference (Z report) | ✅ |
-| **Printable receipt** after every sale (browser print, no driver) | ✅ |
-| **Free debt** ("Ahmed took 500") and **write-off to loss** | ✅ |
-| **Cloud control plane** (separate crate): pairing, lease stub, sync ingest, read-only dashboard, `/health` | ✅ |
-| `--doctor` self-check, `/health` endpoint | ✅ |
+| **Printable receipt** after every sale (browser print — no driver needed) | ✅ |
+| **Cash session**: open with float → counted cash on close → expected vs counted vs difference (Z) | ✅ |
+| **Debts / carnet**: credit sales, **free debts**, balances, collect, **write-off to loss** | ✅ |
+| **Audit everywhere**: setup, login, failed login, logout, product create/edit/archive, sale, collect, write-off, settings | ✅ |
+| **« Qui a fait quoi »** journal — last 200 actions, who/what/when | ✅ |
+| **Cloud control plane** (`crates/control`): pairing, lease stub, sync ingest, read-only dashboard | ✅ |
+| `--doctor` self-check, `/health`, `--port`, `--data` | ✅ |
 | Money as `i64` millimes, 3 decimals, never floats | ✅ |
-| Unit tests for money formatting/parsing, cart maths, margins, VAT | ✅ |
+| Unit tests on money formatting/parsing, cart maths, margins, VAT | ✅ |
 
-### Not yet (tracked in `PLAN.md` §14)
+### Known shortcuts, stated plainly
 
-SQLCipher encryption at rest (M0) · batches/lots + IMEI units (P1) · product images · supplier deliveries · instalment schedules & aging · charts/dashboard · **exe → control-plane sync client** · AI assistant · ESC/POS thermal printing · CSV/Excel import · EAN check digits · roles & cashier PINs · CSRF/rate-limiting hardening · htmx partial swaps.
+* **SQLite is not encrypted yet** — `data/store.db` is a normal SQLite file until the SQLCipher switch (M0).
+* **Roles are not enforced** — one "Patron" account; every screen is reachable, costs are visible to anyone who logs in.
+* **Lease tokens are not signed yet** — `/api/licence/lease` answers `signed:false` on purpose, so a client can refuse it.
+* **The exe does not sync yet** — the ingest endpoint works and is tested by hand; the agent inside `store.exe` is M5.
+* **No CSRF / Host / Origin hardening yet** on the local app.
 
-Known shortcuts in this version, stated plainly:
+### Not built yet (see `PLAN.md` §14)
 
-* **SQLite is not encrypted yet** — `--doctor` says so out loud.
-* **Roles are not enforced** (single "Patron" user; every screen is reachable).
-* **Lease tokens are not signed yet** — `/api/licence/lease` returns `signed:false` so the client can refuse it.
-* **The exe does not sync yet** — the endpoint exists and is tested by hand; the agent inside `store.exe` is M5.
+Batches/lots + IMEI units · product images · supplier deliveries with landed cost & FX · instalment schedules & aging buckets · charts/dashboard · ESC/POS thermal printing · CSV/Excel import · EAN check digits · roles & cashier PINs · backups & restore · AI assistant · htmx partial swaps.
 
 ---
 
 ## Build & run — the till (offline)
 
-Requires **Rust stable 1.79+** and nothing else (no Node, no database server).
+Requires **Rust stable 1.79+** and nothing else.
 
 ```bash
-# Run these from the repository root (the folder containing Cargo.toml):
+# From the repository root (the folder containing Cargo.toml):
 cargo run                # build + start on http://127.0.0.1:8642
 cargo run -p store       # explicit, identical
 ```
 
 > Do **not** run `cargo run` inside `src/` — Cargo looks for `Cargo.toml` in the
 > current directory and its parents, and `src/` has none of its own.
-> `crates/control` is a **separate workspace** (the cloud half): build it with
-> `cargo run` from inside `crates/control`, never from the root.
+> `crates/control` is a **separate workspace** (the cloud half): build it from
+> inside `crates/control`, never from the root.
 
 The browser opens manually — go to the URL printed in the console.
-First launch shows the setup screen: language → shop name → VAT question → password. Then you can sell.
+First launch: language → shop name → VAT question → password, then you can sell.
 
 ```bash
 cargo test               # domain unit tests (money, cart, margin, VAT)
@@ -78,24 +88,19 @@ Data lives in `./data/store.db` (WAL). Delete that folder to start over.
 
 ## Build & run — the cloud half (optional)
 
-It is a **separate crate with its own workspace**, so the till always builds even if this one does not.
+A separate crate with its own workspace, so the till always builds even if this one does not.
 
 ```bash
+psql "$DATABASE_URL_UNPOOLED" -f deploy/cloud/0001_init.sql   # once, on Neon
 cd crates/control
-cp ../../deploy/control-plane.env.example .env   # then set DATABASE_URL to your Neon string
-cargo run                                        # http://localhost:8080
+cp ../../deploy/control-plane.env.example .env                 # set DATABASE_URL
+cargo run                                                     # http://localhost:8080
 ```
 
-First run against an empty Neon database:
-
-```bash
-psql "$DATABASE_URL_UNPOOLED" -f deploy/cloud/0001_init.sql
-```
-
-Then open `http://localhost:8080` — with no data it shows an empty dashboard; `/health` reports `db=up|down`.
+With no `DATABASE_URL` it still starts, and `/health` reports `db=down` instead of crashing.
 Endpoints: `POST /api/device/pair`, `POST /api/licence/lease`, `POST /api/sync/ingest` (device token as `Authorization: Bearer …`).
 
-> **Windows note:** `x86_64-pc-windows-msvc` builds need the MSVC linker (Visual Studio Build Tools). The static-CRT / single-exe packaging work is M7; today the release binary still links the system CRT.
+> **Windows note:** `x86_64-pc-windows-msvc` builds need the MSVC linker (Visual Studio Build Tools). Static-CRT / single-exe packaging is M7; today the release binary still links the system CRT.
 
 ---
 
@@ -103,40 +108,56 @@ Endpoints: `POST /api/device/pair`, `POST /api/licence/lease`, `POST /api/sync/i
 
 ```
 Cargo.toml                  workspace root + `store` binary
-migrations/0001_init.sql    schema v1
+migrations/0001_init.sql    schema v1 (identity, catalog, sales, debts, audit)
+migrations/0002_sessions.sql schema v2 (cash sessions, archiving)
 src/main.rs                 CLI: serve | --doctor | --port | --data
 crates/domain/              pure money & business maths (no I/O, unit-tested)
 crates/storage/             SQLite, repositories, audit choke point
 crates/ui/                  maud components, i18n, embedded CSS  (no .html)
-crates/app/                 axum routes: sell, products, carnet, auth, settings
-docs/                       16 decision records (ADR / DESIGN / SEC / OPS / STRATEGY)
+crates/app/                 axum routes: sell, products, carnet, session, journal, auth
+crates/control/             cloud control plane — separate workspace
+deploy/cloud/0001_init.sql  Neon schema (shops, devices, daily_agg, sync_health)
+deploy/control-plane.env.example
+docs/                       21 decision records (ADR / DESIGN / SEC / OPS / STRATEGY)
 ```
 
 ### Why the structure looks like this
 
-* **`domain` has no dependencies on I/O** — the till, the future control plane and the tests all compute money the same way. One function, one answer.
+* **`domain` has no I/O** — the till, the control plane and the tests compute money the same way. One function, one answer, no local/cloud drift.
 * **`storage` is the only place that writes** — and every write also writes an `audit_events` row, so "who did what, when" is never missing (ADR-011).
-* **`ui` owns every piece of markup** — as Rust functions returning `Markup`. There is no template engine and no `.html` file.
+* **`ui` owns every piece of markup** — Rust functions returning `Markup`. No template engine, no `.html` file.
 * **`app` holds no business logic** — handlers load, call `storage`, render.
 
 ---
 
-## Verified status
+## Build status — honest
 
-The sandbox this was written in has **no Rust toolchain and no access to crates.io**, so the code has **not been compiled here**. Everything uses stable, minimal API surface (axum 0.8 · maud 0.26 · rusqlite 0.32 · argon2 0.5), but expect the usual first-build fixes:
+This code was written in an environment **without a Rust toolchain or crates.io access**, so compilation happens on your machine and in CI (`.github/workflows/ci.yml`, Ubuntu + Windows).
 
-```bash
-cargo build 2>&1 | head -40
-```
+Verified so far from the first real build (issue #1):
 
-Likely candidates on the first build: a maud attribute detail, an unused import warning, or a version bump in `Cargo.toml`. None of them are architectural.
+* `domain` and `ui` compiled; `serde`, `axum`, `maud` resolve correctly ✔
+* a genuine maud bug was found and fixed — an element may not combine the shorthand class with an explicit `class` attribute (fixed in `c5dc29a`) ✔
+* `storage` and `app` have **not been type-checked yet** — they were never reached by the compiler
+
+If the build stops again, paste the error: it will be a concrete API detail, not an architectural one.
 
 ---
 
-## The rules this code already follows
+## The rules this code follows
 
 1. **The till never waits on the network** — no network call exists in any request path.
-2. **Record everything, require nothing** — every sale stores cost, price, payment split and seller; no VAT, no invoice number, no tax ID required.
-3. **Everything editable, nothing anonymous** — audit rows in the same transaction, with actor and summary; edits are versioned (`version`, `updated_by`, soft-delete columns are next).
+2. **Record everything, require nothing** — cost, price, payment split and seller stored on every sale; no VAT, no invoice number, no tax ID required (ADR-007).
+3. **Everything editable, nothing anonymous** — audit rows written in the same transaction, with actor and summary; product edits keep `version`/`updated_by` (ADR-011).
 4. **Every dinar is exact** — `i64` millimes, 3 decimals, no floats, no hidden rounding.
-5. **A non-technical shopkeeper can use it** — no jargon on screen, one primary button per screen, errors say what to do next.
+5. **A non-technical shopkeeper can use it** — no jargon on screen, one primary button per screen, errors say what to do next (DESIGN-003).
+
+---
+
+## Version history
+
+| Version | What landed |
+|---|---|
+| **v0.5** | Renamed to **OneClick**; docs + UI + migrations aligned; version bumped across the workspace |
+| v0.2 | Product edit/archive, audit everywhere + « Qui a fait quoi », cash session + Z report, printable receipt, free debts & write-offs, cloud control plane |
+| v0.1 | First slice: workspace, server-rendered maud UI, offline till, sales, stock ledger, credit sales, carnet, Argon2id auth, fr/ar/en, dark mode |

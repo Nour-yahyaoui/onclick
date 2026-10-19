@@ -1,6 +1,6 @@
 # Design documentation — shop management system
 
-Implementation has started (`v0.2`, see `../README.md`). These records are the decisions it follows:
+Implementation has started (**OneClick v0.5**, see `../README.md`). These records are the decisions it follows:
 
 | Doc | What it settles |
 |---|---|

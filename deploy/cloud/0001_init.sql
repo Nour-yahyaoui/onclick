@@ -1,5 +1,5 @@
 -- ============================================================================
---  NovaShop control plane — cloud schema (Neon Postgres)
+--  OneClick control plane — cloud schema (Neon Postgres)
 --  Run once against the Neon database:
 --     psql "$DATABASE_URL_UNPOOLED" -f deploy/cloud/0001_init.sql
 --  Aggregates + entitlement ONLY. No customer names, no phones, no invoices.

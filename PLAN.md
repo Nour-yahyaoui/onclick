@@ -1,6 +1,6 @@
 # Shop Management System — Architecture & Delivery Plan
 
-**Status:** v0.2 implemented — till usable for a day + cloud control plane (see `README.md`)
+**Status:** v0.5 implemented (**OneClick**) — till usable for a day + cloud control plane (see `README.md`)
 **Target:** one portable `store.exe`, runs offline on the shop PC, local-first, with a cloud dashboard that shows financial figures only.
 
 ---
@@ -399,7 +399,7 @@ Two tracks on purpose: **P = what one real shop needs to start working** (sells 
 
 | # | Milestone | Deliverable | Est. |
 |---|---|---|---|
-| **P0** | Foundation ~~(partial in v0.2)~~ | Rust workspace, axum + maud skeleton, HTTP server, **app-mode window launcher (single-instance)** + SQLite + migrations + `--doctor`; design tokens, logical-property CSS (RTL-safe), i18n scaffolding, Cairo + Amiri, Bismillah masthead, first-run flow, money-format utils; **audit core** (`mutate()`, `audit_events`, hash chain, version + soft-delete); **auth + roles + sessions, SQLCipher + key hierarchy + recovery code**; **instrumentation** (per-screen latency, error ring buffer, slow queries, backup status) | 18 d |
+| **P0** | Foundation ~~(partial in v0.5)~~ | Rust workspace, axum + maud skeleton, HTTP server, **app-mode window launcher (single-instance)** + SQLite + migrations + `--doctor`; design tokens, logical-property CSS (RTL-safe), i18n scaffolding, Cairo + Amiri, Bismillah masthead, first-run flow, money-format utils; **audit core** (`mutate()`, `audit_events`, hash chain, version + soft-delete); **auth + roles + sessions, SQLCipher + key hierarchy + recovery code**; **instrumentation** (per-screen latency, error ring buffer, slow queries, backup status) | 18 d |
 | **P1** | Catalog & stock | products/variants, multi-barcode + lookup map, import, stock ledger, levels, **batches (receive + FEFO)**, **image upload (encrypted)**, **serialized units + IMEI + warranty lookup** | 23 d |
 | **P2** | POS & sales | cart, **scan-to-cart**, negotiated price entry, payments (cash/card/credit), receipts view, returns, cash sessions + Z, **theme + keyboard model**, **crash-proof sale journal** | 13 d |
 | **P3** | Debts & closing | debt carnet (sale debts, free debts, tranches, settlement, aging), opening-balance import, daily closing + reports, expenses | 14 d |
