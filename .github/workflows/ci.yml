@@ -23,6 +23,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Blocking, and fast: catches the maud shorthand-class trap before the
+      # compiler does (it broke the build twice, see issues #1 and #4).
+      - name: maud class lint
+        if: runner.os == 'Linux'
+        run: python3 scripts/lint_maud.py
+
       # Blocking: the money maths must always hold, and the binary must build.
       - name: Unit tests (domain money/cart/VAT)
         run: cargo test --all

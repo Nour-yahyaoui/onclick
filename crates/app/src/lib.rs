@@ -1421,7 +1421,7 @@ async fn setup_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
         div.auth-foot {
             div.seg {
                 @for l in Lang::ALL {
-                    a.seg-item href=(format!("/lang/{}", l.code()))
+                    a href=(format!("/lang/{}", l.code()))
                         class=(if l == lang { "seg-item active" } else { "seg-item" }) {
                         (l.code().to_uppercase())
                     }
@@ -1542,7 +1542,7 @@ async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
         div.auth-foot {
             div.seg {
                 @for l in Lang::ALL {
-                    a.seg-item href=(format!("/lang/{}", l.code()))
+                    a href=(format!("/lang/{}", l.code()))
                         class=(if l == lang { "seg-item active" } else { "seg-item" }) {
                         (l.code().to_uppercase())
                     }
@@ -1690,7 +1690,7 @@ async fn settings_page(
                             h3 { (ui::t(lang, "settings.lang")) }
                             div.seg {
                                 @for l in Lang::ALL {
-                                    a.seg-item href=(format!("/lang/{}", l.code()))
+                                    a href=(format!("/lang/{}", l.code()))
                                         class=(if l == lang { "seg-item active" } else { "seg-item" }) {
                                         (l.label())
                                     }

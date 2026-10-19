@@ -429,7 +429,7 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     let item = |nav: Nav| {
         let is_active = active == Some(nav);
         html! {
-            a.nav-item href=(nav.href())
+            a href=(nav.href())
               class=(if is_active { "nav-item active" } else { "nav-item" })
               aria-current=(if is_active { "page" } else { "false" }) {
                 span.nav-label { (t(lang, nav.key())) }
