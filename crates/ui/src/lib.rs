@@ -153,6 +153,18 @@ fn fr(key: &str) -> &'static str {
         "nav.session" => "Caisse / Z",
         "nav.journal" => "Journal",
         "common.save" => "Enregistrer",
+        "common.close" => "Fermer",
+        "common.done" => "Terminé",
+        "toast.sale" => "Vente enregistrée",
+        "toast.credit" => "Vente à crédit enregistrée — ajoutée au carnet",
+        "toast.saved" => "Enregistré",
+        "toast.created" => "Produit ajouté",
+        "toast.archived" => "Produit archivé",
+        "toast.collected" => "Paiement encaissé",
+        "toast.debt" => "Dette ajoutée au carnet",
+        "toast.written_off" => "Dette passée en perte",
+        "toast.opened" => "Caisse ouverte",
+        "toast.closed" => "Caisse fermée — Z enregistré",
         "common.cancel" => "Annuler",
         "common.total" => "Total",
         "common.name" => "Nom",
@@ -224,6 +236,18 @@ fn ar(key: &str) -> Option<&'static str> {
         "nav.settings" => "الإعدادات",
         "nav.logout" => "خروج",
         "common.save" => "حفظ",
+        "common.close" => "إغلاق",
+        "common.done" => "تم",
+        "toast.sale" => "تم تسجيل البيع",
+        "toast.credit" => "بيع بالأجل — أضيف إلى الكرنيه",
+        "toast.saved" => "تم الحفظ",
+        "toast.created" => "تمت إضافة المنتج",
+        "toast.archived" => "تم أرشفة المنتج",
+        "toast.collected" => "تم استلام الدفعة",
+        "toast.debt" => "أضيفت دين إلى الكرنيه",
+        "toast.written_off" => "شُطب الدين كخسارة",
+        "toast.opened" => "تم فتح الصندوق",
+        "toast.closed" => "تم إغلاق الصندوق — Z محفوظ",
         "common.cancel" => "إلغاء",
         "common.total" => "المجموع",
         "common.name" => "الاسم",
@@ -295,6 +319,18 @@ fn en(key: &str) -> Option<&'static str> {
         "nav.settings" => "Settings",
         "nav.logout" => "Sign out",
         "common.save" => "Save",
+        "common.close" => "Close",
+        "common.done" => "Done",
+        "toast.sale" => "Sale saved",
+        "toast.credit" => "Credit sale saved — added to the debt book",
+        "toast.saved" => "Saved",
+        "toast.created" => "Product added",
+        "toast.archived" => "Product archived",
+        "toast.collected" => "Payment collected",
+        "toast.debt" => "Debt added to the book",
+        "toast.written_off" => "Debt written off",
+        "toast.opened" => "Drawer opened",
+        "toast.closed" => "Drawer closed — Z saved",
         "common.cancel" => "Cancel",
         "common.total" => "Total",
         "common.name" => "Name",
@@ -544,6 +580,16 @@ pub fn banner(kind: &str, title: &str, text: &str) -> Markup {
         div class=(format!("banner {kind}")) {
             strong { (title) }
             span { (text) }
+        }
+    }
+}
+
+/// Non-blocking confirmation: appears bottom-centre, fades out on its own.
+pub fn toast(text: &str, kind: &str) -> Markup {
+    html! {
+        div class=(format!("toast {kind}")) role="status" aria-live="polite" {
+            span.toast-dot aria-hidden="true" {}
+            span.toast-text { (text) }
         }
     }
 }

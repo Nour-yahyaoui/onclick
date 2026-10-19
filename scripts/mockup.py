@@ -51,7 +51,7 @@ CART = [("iPhone 13 128 Go", "1", "2,450.000", "2,450.000"),
 SIDE_W = 262
 
 
-def render(theme, out):
+def render(theme, out, modal=False):
     c = LIGHT if theme == "light" else DARK
     img = Image.new("RGB", (W, H), c["canvas"])
     d = ImageDraw.Draw(img)
@@ -195,6 +195,57 @@ def render(theme, out):
     rr(d, (cx1 - inner - half, cy1 - 42, cx1 - inner, cy1 - 10), 10, fill=c["surface"], outline=c["hair"])
     text(d, (cx1 - inner - half // 2, cy1 - 26), "Crédit", 12, True, c["ink"], anchor="mm")
 
+    if modal:
+        img = Image.alpha_composite(
+            img.convert("RGBA"), Image.new("RGBA", (W, H), (12, 16, 14, 118))
+        ).convert("RGB")
+        d = ImageDraw.Draw(img)
+
+        mw, mh = 720, 560
+        mx0, my0 = (W - mw) // 2, (H - mh) // 2
+        mx1, my1 = mx0 + mw, my0 + mh
+        rr(d, (mx0, my0, mx1, my1), 26, fill=c["surface"], outline=c["hair"])
+        text(d, (mx0 + 20, my0 + 26), "Réglages", 17, True, c["ink"])
+        rr(d, (mx1 - 56, my0 + 16, mx1 - 20, my0 + 52), 10, fill=c["surface"], outline=c["hair"])
+        text(d, (mx1 - 38, my0 + 33), "×", 15, True, c["ink2"], anchor="mm")
+        d.line((mx0, my0 + 68, mx1, my0 + 68), fill=c["hair"], width=1)
+
+        # language segment
+        text(d, (mx0 + 20, my0 + 90), "Langue", 12, True, c["ink"])
+        rr(d, (mx0 + 20, my0 + 110, mx0 + 340, my0 + 154), 11, fill=c["surface3"])
+        rr(d, (mx0 + 23, my0 + 113, mx0 + 130, my0 + 151), 9, fill=c["surface"])
+        text(d, (mx0 + 76, my0 + 132), "Français", 11, True, c["ink"], anchor="mm")
+        text(d, (mx0 + 190, my0 + 132), "العربية", 11, False, c["muted"], anchor="mm")
+        text(d, (mx0 + 285, my0 + 132), "English", 11, False, c["muted"], anchor="mm")
+
+        d.line((mx0 + 20, my0 + 176, mx1 - 20, my0 + 176), fill=c["hair"], width=1)
+        text(d, (mx0 + 20, my0 + 196), "Nom du magasin", 12, True, c["ink"])
+        rr(d, (mx0 + 20, my0 + 216, mx1 - 20, my0 + 264), 12, fill=c["surface"], outline=c["hair"])
+        text(d, (mx0 + 34, my0 + 240), "Écran Bleu", 13, False, c["ink"], anchor="lm")
+        rr(d, (mx0 + 20, my0 + 274, mx0 + 132, my0 + 316), 11, fill=c["accent"])
+        text(d, (mx0 + 76, my0 + 295), "Enregistrer", 11, True, c["accent_ink"], anchor="mm")
+
+        d.line((mx0 + 20, my0 + 340, mx1 - 20, my0 + 340), fill=c["hair"], width=1)
+        text(d, (mx0 + 20, my0 + 360), "Historique", 12, True, c["ink"])
+        rr(d, (mx0 + 20, my0 + 382, mx0 + 178, my0 + 424), 11, fill=c["surface"], outline=c["hair"])
+        text(d, (mx0 + 99, my0 + 403), "Qui a fait quoi", 11, True, c["ink"], anchor="mm")
+        rr(d, (mx0 + 190, my0 + 382, mx0 + 296, my0 + 424), 11, fill=c["surface"], outline=c["hair"])
+        text(d, (mx0 + 243, my0 + 403), "Caisse / Z", 11, True, c["ink"], anchor="mm")
+
+        # footer
+        d.line((mx0, my1 - 64, mx1, my1 - 64), fill=c["hair"], width=1)
+        d.rectangle((mx0, my1 - 64, mx1, my1), fill=c["surface2"])
+        rr(d, (mx1 - 210, my1 - 50, mx1 - 112, my1 - 14), 11, fill=c["surface"], outline=c["hair"])
+        text(d, (mx1 - 161, my1 - 32), "Fermer", 11, True, c["ink"], anchor="mm")
+        rr(d, (mx1 - 104, my1 - 50, mx1 - 20, my1 - 14), 11, fill=c["accent"])
+        text(d, (mx1 - 62, my1 - 32), "Terminé", 11, True, c["accent_ink"], anchor="mm")
+
+        # toast
+        tw_ = 232
+        rr(d, ((W - tw_) // 2, H - 70, (W + tw_) // 2, H - 26), 22, fill=c["ink"])
+        d.ellipse(((W - tw_) // 2 + 20, H - 52, (W - tw_) // 2 + 29, H - 43), fill="#4ADE80")
+        text(d, ((W - tw_) // 2 + 40, H - 48), "Réglages enregistrés", 11, True, c["canvas"], anchor="lm")
+
     img.save(out)
     print("wrote", out)
 
@@ -204,3 +255,4 @@ if __name__ == "__main__":
     outdir.mkdir(parents=True, exist_ok=True)
     render("light", outdir / "design-pos-light.png")
     render("dark", outdir / "design-pos-dark.png")
+    render("light", outdir / "design-settings.png", modal=True)

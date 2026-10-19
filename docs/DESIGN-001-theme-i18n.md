@@ -264,3 +264,17 @@ times:
 The Bismillah strip stays **under the header line**, inside the main column.
 Below 900 px the sidebar collapses into a wrapping top strip (search full-width,
 nav horizontally scrollable) — no hamburger, nothing hidden.
+
+### v0.7 addendum — width, modal, toasts, retry
+
+* **Nothing is full-bleed any more.** `.wrap` is capped at **1180 px** and centred; forms
+  and single-record screens cap at **640 px** so a line of text stays readable on a
+  large monitor. Tables still use the full 1180 px.
+* **Settings is a modal**, 58 % of the window (max 720 px), floating over the till
+  with a blurred dim backdrop. The till stays visible, so the shopkeeper never feels
+  they left the counter. Close (×), Fermer and Terminé all return to the till.
+* **Toasts** confirm every action and then leave on their own — dark pill, bottom
+  centre, green dot, ~4 s. CSS-only (fade-in, then fade-out keyframes), so they work
+  with JavaScript disabled and on an old Windows browser.
+* **Retry** is the primary action on the error screen (« Réessayer ») with
+  « Retour au comptoir » as the way out; the message still says nothing is lost.

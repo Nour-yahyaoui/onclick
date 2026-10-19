@@ -31,6 +31,9 @@ Current version: **v0.5** — a till you can run a full day on, plus the cloud h
 | French / Arabic (RTL) / English, one tap to switch | ✅ |
 | Light + dark theme (rebuilt palette), persisted per device | ✅ |
 | Bismillah rendered in its own strip under the header | ✅ |
+| Content capped at 1180 px (forms 640 px) — never edge-to-edge | ✅ |
+| Settings as a **modal** (58%, over the till) instead of a full page | ✅ |
+| **Toasts** after every action + **Réessayer** on errors | ✅ |
 | **Sidebar**: quick sell, search/scan, Vendre · Ventes · Carnet · Produits, Caisse/Z · Journal · Réglages | ✅ |
 | **Ventes** page: the day book, one tap to reprint a ticket | ✅ |
 | Bismillah masthead (Amiri/naskh stack) on every page | ✅ |
@@ -161,6 +164,7 @@ If the build stops again, paste the error: it will be a concrete API detail, not
 
 | Version | What landed |
 |---|---|
+| **v0.5.3** | Width caps, settings modal, toasts, retry button |
 | **v0.5.2** | Persistent sidebar (quick sell, search, sales, debts, menu) + sales day-book page |
 | **v0.5.1** | Visual rebuild: new light/dark palette (warm paper / deep slate), no side rail, Bismillah moved under the app bar, two-column POS, new cart panel — see `docs/assets/design-pos-{light,dark}.png` |
 | **v0.5** | Renamed to **OneClick**; docs + UI + migrations aligned; version bumped across the workspace |

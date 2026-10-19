@@ -151,9 +151,13 @@ fn failure(lang: Lang, err: anyhow::Error) -> Response {
     eprintln!("[erreur] {err:#}");
     let body = html! {
         h1 { "Une erreur est survenue" }
-        p { "Rien n'est perdu : vos ventes sont enregistrées. Réessayez." }
-        p.muted { "Si cela continue, appelez l'assistance." }
-        a.btn.btn-primary.btn-block href="/" { "Retour" }
+        p { "Rien n'est perdu : vos ventes sont enregistrées." }
+        p.muted { "Appuyez sur « Réessayer ». Si cela continue, appelez l'assistance." }
+        div style="display:grid;gap:.5rem;margin-block-start:1rem" {
+            button.btn.btn-primary.btn-block.btn-lg type="button"
+                   onclick="location.reload()" { "Réessayer" }
+            a.btn.btn-ghost.btn-block href="/" { "Retour au comptoir" }
+        }
     };
     (
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -191,6 +195,40 @@ struct SearchParams {
     done: Option<String>,
 }
 
+/// Every action that redirects carries a short `done=` code, which becomes a
+/// toast on the next screen (DESIGN-003: always say what just happened).
+#[derive(Deserialize, Default)]
+struct DoneQuery {
+    done: Option<String>,
+    saved: Option<String>,
+}
+
+fn toast_text(lang: Lang, code: &str) -> Option<&'static str> {
+    let text = match code {
+        "sale" => ui::t(lang, "toast.sale"),
+        "credit" => ui::t(lang, "toast.credit"),
+        "saved" => ui::t(lang, "toast.saved"),
+        "created" => ui::t(lang, "toast.created"),
+        "archived" => ui::t(lang, "toast.archived"),
+        "collected" => ui::t(lang, "toast.collected"),
+        "debt" => ui::t(lang, "toast.debt"),
+        "written_off" => ui::t(lang, "toast.written_off"),
+        "opened" => ui::t(lang, "toast.opened"),
+        "closed" => ui::t(lang, "toast.closed"),
+        _ => return None,
+    };
+    Some(text)
+}
+
+fn toast_from(query: &DoneQuery, lang: Lang) -> Option<Markup> {
+    let code = query.done.clone().or_else(|| {
+        query.saved.as_ref().map(|s| {
+            if s == "1" || s == "true" { "saved".to_string() } else { s.clone() }
+        })
+    })?;
+    toast_text(lang, &code).map(|text| ui::toast(text, "ok"))
+}
+
 async fn index(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -212,7 +250,7 @@ async fn index(
     }
 }
 
-fn render_index(
+fn pos_body(
     conn: &Db,
     headers: &HeaderMap,
     user: &User,
@@ -226,14 +264,11 @@ fn render_index(
     let products = storage::list_products(conn, query)?;
     let (revenue, tickets) = storage::today_totals(conn)?;
     let session = storage::current_session(conn)?;
+    let notice = done.and_then(|code| toast_text(lang, code));
 
     let body = html! {
-        @if let Some(done) = done {
-            @if done == "credit" {
-                (ui::banner("ok", ui::t(lang, "done.credit"), ""))
-            } @else {
-                (ui::banner("ok", ui::t(lang, "done.sale"), ""))
-            }
+        @if let Some(text) = notice {
+            (ui::toast(text, "ok"))
         }
 
         div.page-head {
@@ -351,7 +386,24 @@ fn render_index(
         }
     };
 
-    Ok(ui::page(&chrome(conn, headers, user, Nav::Sell, drafts.len(), ui::t(lang, "nav.sell")), body))
+    Ok(body)
+}
+
+fn render_index(
+    conn: &Db,
+    headers: &HeaderMap,
+    user: &User,
+    query: Option<&str>,
+    done: Option<&str>,
+) -> Result<Markup> {
+    let lang = lang_of(headers);
+    let sid = cookie(headers, "sid").unwrap_or_default();
+    let cart = storage::draft_lines(conn, &sid)?.len();
+    let body = pos_body(conn, headers, user, query, done)?;
+    Ok(ui::page(
+        &chrome(conn, headers, user, Nav::Sell, cart, ui::t(lang, "nav.sell")),
+        body,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -481,6 +533,7 @@ async fn checkout(
 
 #[derive(Deserialize)]
 struct ProductSearch {
+    done: Option<String>,
     q: Option<String>,
 }
 
@@ -498,9 +551,16 @@ async fn products_page(
         return Redirect::to("/login").into_response();
     };
 
+    let notice = params
+        .done
+        .as_deref()
+        .and_then(|code| toast_text(lang, code))
+        .map(|text| ui::toast(text, "ok"));
+
     let result = (|| -> Result<Markup> {
         let products = storage::list_products(&conn, params.q.as_deref())?;
         let body = html! {
+            @if let Some(toast) = notice { (toast) }
             div style="display:flex;justify-content:space-between;align-items:center;margin-block-end:.75rem" {
                 h1 { (ui::t(lang, "products.title")) }
                 a.btn.btn-primary href="/products/new" { (ui::t(lang, "products.new")) }
@@ -617,7 +677,7 @@ async fn product_create(
         .filter(|b| !b.is_empty());
 
     match storage::create_product(&conn, &user, form.name.trim(), barcode, price, cost, qty) {
-        Ok(_) => Redirect::to("/products").into_response(),
+        Ok(_) => Redirect::to("/products?done=created").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -727,7 +787,7 @@ async fn product_edit_page(
             p { a href="/products" { "← " (ui::t(lang, "products.title")) } }
             h1 { (product.name) }
 
-            form method="post" action=(format!("/products/{}/edit", product.id)) {
+            form.form-card method="post" action=(format!("/products/{}/edit", product.id)) {
                 label for="name" { (ui::t(lang, "common.name")) }
                 input type="text" id="name" name="name" value=(product.name) required autofocus;
 
@@ -800,7 +860,7 @@ async fn product_update(
         .filter(|b| !b.is_empty());
 
     match storage::update_product(&conn, &user, &path.id, form.name.trim(), barcode, price, cost) {
-        Ok(()) => Redirect::to("/products").into_response(),
+        Ok(()) => Redirect::to("/products?done=saved").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -816,7 +876,7 @@ async fn product_archive(
         return Redirect::to("/login").into_response();
     };
     match storage::archive_product(&conn, &user, &path.id, true) {
-        Ok(()) => Redirect::to("/products").into_response(),
+        Ok(()) => Redirect::to("/products?done=archived").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -882,12 +942,18 @@ async fn journal_page(State(state): State<AppState>, headers: HeaderMap) -> Resp
 // Cash session + Z report
 // ---------------------------------------------------------------------------
 
-async fn session_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+async fn session_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<DoneQuery>,
+) -> Response {
     let lang = lang_of(&headers);
     let conn = state.db.lock().unwrap();
     let Some(user) = user_of(&conn, &headers) else {
         return Redirect::to("/login").into_response();
     };
+
+    let notice = toast_from(&query, lang);
 
     let result = (|| -> Result<Markup> {
         let current = storage::current_session(&conn)?;
@@ -965,6 +1031,10 @@ async fn session_page(State(state): State<AppState>, headers: HeaderMap) -> Resp
                 }
             },
         };
+        let body = html! {
+            @if let Some(toast) = &notice { (toast) }
+            (body)
+        };
         Ok(ui::page(&chrome(&conn, &headers, &user, Nav::Sell, 0, "Caisse"), body))
     })();
 
@@ -991,7 +1061,7 @@ async fn session_open(
     };
     let float = form.float.as_deref().and_then(parse_money).unwrap_or(0);
     match storage::open_session(&conn, &user, float) {
-        Ok(_) => Redirect::to("/session").into_response(),
+        Ok(_) => Redirect::to("/session?done=opened").into_response(),
         Err(err) => {
             // Already open -> simply show the screen, never an error page.
             if err.to_string().contains("already_open") {
@@ -1020,7 +1090,7 @@ async fn session_close(
     };
     let counted = form.counted.as_deref().and_then(parse_money).unwrap_or(0);
     match storage::close_session(&conn, &user, counted) {
-        Ok(_) => Redirect::to("/session").into_response(),
+        Ok(_) => Redirect::to("/session?done=closed").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -1044,6 +1114,7 @@ async fn receipt_page(
         let receipt = storage::receipt(&conn, &path.id)?;
         let shop = shop_name(&conn);
         let body = html! {
+            (ui::toast(ui::t(lang, "toast.sale"), "ok"))
             div.auth style="max-inline-size:520px;margin:0 auto" {
                 div.card.card-pad {
                     div style="text-align:center" {
@@ -1121,10 +1192,17 @@ async fn carnet_page(
         return Redirect::to("/login").into_response();
     };
 
+    let notice = params
+        .done
+        .as_deref()
+        .and_then(|code| toast_text(lang, code))
+        .map(|text| ui::toast(text, "ok"));
+
     let result = (|| -> Result<Markup> {
         let debts = storage::open_debts(&conn)?;
         let total: i64 = debts.iter().map(|d| d.balance).sum();
         let body = html! {
+            @if let Some(toast) = notice { (toast) }
             @if params.done.is_some() {
                 (ui::banner("ok", ui::t(lang, "done.credit"), ""))
             }
@@ -1226,7 +1304,7 @@ async fn carnet_collect(
     };
     let amount = parse_money(&form.amount).unwrap_or(0);
     match storage::collect(&conn, &form.debt_id, amount, "cash", &user) {
-        Ok(()) => Redirect::to("/carnet").into_response(),
+        Ok(()) => Redirect::to("/carnet?done=collected").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -1262,7 +1340,7 @@ async fn carnet_new(
         amount,
         form.reason.map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
     ) {
-        Ok(_) => Redirect::to("/carnet").into_response(),
+        Ok(_) => Redirect::to("/carnet?done=debt").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -1285,7 +1363,7 @@ async fn carnet_writeoff(
     };
     let reason = form.reason.unwrap_or_else(|| "irrécouvrable".to_string());
     match storage::write_off_debt(&conn, &user, &form.debt_id, &reason) {
-        Ok(()) => Redirect::to("/carnet").into_response(),
+        Ok(()) => Redirect::to("/carnet?done=written_off").into_response(),
         Err(err) => failure(lang, err),
     }
 }
@@ -1553,7 +1631,11 @@ async fn set_lang(
 // Settings (6 plain items — DESIGN-003 §6)
 // ---------------------------------------------------------------------------
 
-async fn settings_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+async fn settings_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<DoneQuery>,
+) -> Response {
     let lang = lang_of(&headers);
     let conn = state.db.lock().unwrap();
     let Some(user) = user_of(&conn, &headers) else {
@@ -1561,45 +1643,77 @@ async fn settings_page(State(state): State<AppState>, headers: HeaderMap) -> Res
     };
 
     let shop = shop_name(&conn);
-    let body = html! {
-        h1 { (ui::t(lang, "settings.title")) }
+    let notice = toast_from(&query, lang);
 
-        div.card.card-pad style="margin-block-end:1rem" {
-            h2 { (ui::t(lang, "settings.lang")) }
-            div style="display:flex;gap:.5rem;flex-wrap:wrap" {
-                @for l in Lang::ALL {
-                    a.btn.btn-ghost href=(format!("/lang/{}", l.code())) { (l.label()) }
+    // The till stays visible behind the dialog: settings never feels like another app.
+    let result = (|| -> Result<Markup> {
+        let behind = pos_body(&conn, &headers, &user, None, None)?;
+        let body = html! {
+            (behind)
+            (notice)
+
+            div.overlay role="dialog" aria-modal="true" aria-labelledby="settings-title" {
+                div.modal {
+                    div.modal-head {
+                        h2 #settings-title { (ui::t(lang, "settings.title")) }
+                        a.modal-close href="/" aria-label=(ui::t(lang, "common.close")) { "×" }
+                    }
+                    div.modal-body {
+                        div.field {
+                            h3 { (ui::t(lang, "settings.lang")) }
+                            div.seg {
+                                @for l in Lang::ALL {
+                                    a.seg-item href=(format!("/lang/{}", l.code()))
+                                        class=(if l == lang { "seg-item active" } else { "seg-item" }) {
+                                        (l.label())
+                                    }
+                                }
+                            }
+                        }
+
+                        div.field {
+                            h3 { (ui::t(lang, "setup.shop")) }
+                            form method="post" action="/settings" {
+                                input type="text" name="shop_name" value=(shop);
+                                button.btn.btn-primary type="submit" style="margin-block-start:.6rem" {
+                                    (ui::t(lang, "common.save"))
+                                }
+                            }
+                        }
+
+                        div.field {
+                            h3 { "Historique" }
+                            p.muted { "Toutes les actions : ventes, modifications, encaissements." }
+                            div style="display:flex;gap:.5rem;flex-wrap:wrap" {
+                                a.btn href="/journal" { "Qui a fait quoi" }
+                                a.btn href="/session" { "Caisse / Z" }
+                            }
+                        }
+
+                        div.field {
+                            h3 { "Protection" }
+                            p.muted { (ui::t(lang, "settings.security")) }
+                        }
+                    }
+                    div.modal-foot {
+                        a.btn.btn-ghost href="/" { (ui::t(lang, "common.close")) }
+                        button.btn.btn-primary type="button" onclick="location.reload()" {
+                            (ui::t(lang, "common.done"))
+                        }
+                    }
                 }
             }
-        }
+        };
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Settings, 0, ui::t(lang, "settings.title")),
+            body,
+        ))
+    })();
 
-        div.card.card-pad style="margin-block-end:1rem" {
-            h2 { (ui::t(lang, "setup.shop")) }
-            form method="post" action="/settings" {
-                input type="text" name="shop_name" value=(shop);
-                button.btn.btn-primary type="submit" style="margin-block-start:.5rem" {
-                    (ui::t(lang, "common.save"))
-                }
-            }
-        }
-
-        div.card.card-pad style="margin-block-end:1rem" {
-            h2 { "Qui a fait quoi" }
-            p.muted { "Voir toutes les actions : ventes, modifications, encaissements." }
-            a.btn.btn-ghost href="/journal" { "Ouvrir le journal" }
-            a.btn.btn-ghost href="/session" { "Caisse / Z" }
-        }
-
-        div.card.card-pad {
-            h2 { "Protection" }
-            p.muted { (ui::t(lang, "settings.security")) }
-        }
-    };
-
-    page_response(ui::page(
-        &chrome(&conn, &headers, &user, Nav::Settings, 0, ui::t(lang, "settings.title")),
-        body,
-    ))
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1617,9 +1731,10 @@ async fn settings_save(
     let Some(user) = user_of(&conn, &headers) else {
         return Redirect::to("/login").into_response();
     };
+
+    let name = form.shop_name.unwrap_or_default().trim().to_string();
     let result = (|| -> Result<()> {
-        let name = form.shop_name.unwrap_or_default();
-        storage::set_setting(&conn, "shop_name", name.trim())?;
+        storage::set_setting(&conn, "shop_name", &name)?;
         storage::audit(
             &conn,
             &user,
@@ -1632,8 +1747,9 @@ async fn settings_save(
         )?;
         Ok(())
     })();
+
     match result {
-        Ok(()) => Redirect::to("/settings").into_response(),
+        Ok(()) => Redirect::to("/settings?saved=1").into_response(),
         Err(err) => failure(lang, err),
     }
 }

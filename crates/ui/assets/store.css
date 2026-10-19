@@ -66,6 +66,7 @@
   --bar-h: 0px;
   --panel-w: 384px;
   --side-w: 262px;
+  --content-max: 1180px;
 }
 
 [data-theme="dark"] {
@@ -413,7 +414,8 @@ a:hover { text-decoration: underline; }
    -------------------------------------------------------------------------- */
 
 .wrap {
-  max-inline-size: 1440px;
+  /* never edge-to-edge on a 27" screen: read comfortably, sell comfortably */
+  max-inline-size: var(--content-max);
   margin-inline: auto;
   padding: clamp(14px, 2vw, 26px);
 }
@@ -755,6 +757,10 @@ form:has(> .product) { display: contents; }
 .card-pad { padding: clamp(14px, 1.6vw, 20px); }
 .card + .card { margin-block-start: 14px; }
 
+/* reading width for forms and lists: ~68 characters, not 190 */
+.form-card { max-inline-size: 640px; }
+.card.form-card { max-inline-size: 640px; }
+
 .list { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .list th {
   padding: 8px 10px;
@@ -824,6 +830,143 @@ input:focus, select:focus, textarea:focus {
 input[dir="ltr"] { font-variant-numeric: tabular-nums; }
 
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* --------------------------------------------------------------------------
+   9b. Modal — used for settings, so the till never disappears
+   -------------------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(12 16 14 / .42);
+  backdrop-filter: blur(3px) saturate(1.1);
+  animation: fade-in .16s ease-out;
+}
+
+.modal {
+  inline-size: min(58%, 720px);
+  max-block-size: min(86vh, 780px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3);
+  animation: modal-in .2s cubic-bezier(.2, .8, .3, 1);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-block-end: 1px solid var(--hair);
+}
+.modal-head h2 { margin: 0; font-size: 1.1rem; }
+
+.modal-close {
+  margin-inline-start: auto;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--hair);
+  color: var(--ink-2);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.modal-close:hover { background: var(--surface-3); text-decoration: none; }
+
+.modal-body {
+  padding: 6px 18px 18px;
+  overflow-y: auto;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-block-start: 1px solid var(--hair);
+  background: var(--surface-2);
+}
+
+.modal .field { padding-block: 14px; border-block-end: 1px solid var(--hair); }
+.modal .field:last-child { border-block-end: 0; }
+.modal .field h3 { margin: 0 0 8px; font-size: var(--fs-sm); }
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-3);
+}
+.seg-item {
+  padding: .35rem .75rem;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.seg-item:hover { color: var(--ink); text-decoration: none; }
+.seg-item.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1); }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   9c. Toast — says what just happened, then gets out of the way
+   -------------------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 26px;
+  z-index: 70;
+  margin-inline: auto;
+  inline-size: fit-content;
+  max-inline-size: min(92vw, 440px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--canvas);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-3);
+  animation: toast-in .22s cubic-bezier(.2, .8, .3, 1),
+             toast-out .35s ease-in 4.1s forwards;
+  pointer-events: none;
+}
+.toast-dot {
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.toast.ok .toast-dot { background: #4ADE80; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(8px); }
+}
 
 /* --------------------------------------------------------------------------
    10. Banners / empty states
@@ -938,6 +1081,7 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
 
 @media print {
   @page { margin: 8mm; size: 80mm auto; }
+  .toast, .overlay { display: none !important; }
   .sidebar, .bismillah-bar, .menu, .no-print, .wrap > .page-head { display: none !important; }
   .auth-shell { background: #fff; padding: 0; min-block-size: auto; }
   .auth { inline-size: auto; max-inline-size: none; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
