@@ -235,25 +235,30 @@ fn render_index(
             }
         }
 
-        p.muted {
-            (ui::t(lang, "pos.today")) ": " (ui::money_tnd(revenue))
-            " · " (tickets) " " (ui::t(lang, "pos.tickets"))
-            " · "
+        div.page-head {
+            h1 { (ui::t(lang, "nav.sell")) }
+            span.muted {
+                (ui::t(lang, "pos.today")) " " (ui::money_tnd(revenue))
+                " · " (tickets) " " (ui::t(lang, "pos.tickets"))
+            }
+            span.spacer {}
             @if let Some(session) = &session {
-                a href="/session" { "Caisse ouverte depuis " (session.opened_at.get(11..16).unwrap_or("")) }
+                a.btn.btn-ghost href="/session" {
+                    "Caisse ouverte depuis " (session.opened_at.get(11..16).unwrap_or(""))
+                }
             } @else {
-                a href="/session" { "Caisse fermée — ouvrir" }
+                a.btn.btn-ghost href="/session" { "Caisse fermée — ouvrir" }
             }
         }
 
         div.pos {
-            section {
+            section.pos-main {
                 form.scan method="get" action="/" {
                     input type="search" name="q" dir="ltr"
                           placeholder=(ui::t(lang, "pos.search"))
                           value=(query.unwrap_or(""))
                           autofocus;
-                    button.btn type="submit" { "🔍" }
+                    a.btn href="/products/new" { (ui::t(lang, "pos.new_product")) }
                 }
 
                 @if products.is_empty() {
@@ -275,60 +280,75 @@ fn render_index(
                 }
             }
 
-            aside.card.card-pad {
-                h2 { (ui::t(lang, "nav.sell")) }
+            aside.cart-panel {
+                div.cart-head {
+                    h2 { (ui::t(lang, "nav.sell")) }
+                    @if !drafts.is_empty() {
+                        span.count { (drafts.len()) }
+                    }
+                }
 
                 @if drafts.is_empty() {
                     (ui::empty_state(ui::t(lang, "pos.empty_cart")))
                 } @else {
-                    @for line in &drafts {
-                        (ui::draft_row(&ui::DraftView {
-                            product_id: line.product_id.as_str(),
-                            name: line.name.as_str(),
-                            qty: line.qty,
-                            unit_price: line.unit_price,
-                            line_total: line.line_total,
-                        }, lang))
-                    }
-
-                    div.totals {
-                        div.row {
-                            span { (ui::t(lang, "common.total")) }
-                            span.money-cell { (ui::money(total)) }
-                        }
-                        div.grand {
-                            span { (ui::t(lang, "common.total")) }
-                            span.money { (format_money(total)) }
+                    div.cart-lines {
+                        @for line in &drafts {
+                            (ui::draft_row(&ui::DraftView {
+                                product_id: line.product_id.as_str(),
+                                name: line.name.as_str(),
+                                qty: line.qty,
+                                unit_price: line.unit_price,
+                                line_total: line.line_total,
+                            }, lang))
                         }
                     }
 
-                    form method="post" action="/checkout" {
-                        button.btn.btn-primary.btn-block.btn-lg type="submit"
-                               name="payment" value="cash" {
-                            (ui::t(lang, "pos.charge"))
+                    div.cart-foot {
+                        div.totals {
+                            div.row {
+                                span { (drafts.len()) " " (ui::t(lang, "pos.articles")) }
+                                span.money-cell { (ui::money(total)) }
+                            }
+                            div.grand {
+                                span { (ui::t(lang, "common.total")) }
+                                span.money dir="ltr" {
+                                    (format_money(total))
+                                    span.unit { " DT" }
+                                }
+                            }
                         }
-                        div.muted style="margin-block-start:.5rem" {
-                            (ui::t(lang, "pos.cash")) " · " (ui::t(lang, "pos.card")) " · " (ui::t(lang, "pos.credit"))
-                        }
-                    }
 
-                    form method="post" action="/checkout" {
-                        input type="hidden" name="payment" value="card";
-                        button.btn.btn-ghost.btn-block type="submit" style="margin-block-start:.5rem" {
-                            (ui::t(lang, "pos.card"))
-                        }
-                    }
-
-                    details style="margin-block-start:.75rem" {
-                        summary { (ui::t(lang, "pos.credit")) }
-                        form method="post" action="/checkout" {
-                            input type="hidden" name="payment" value="credit";
-                            label for="debtor" { (ui::t(lang, "pos.debtor")) }
-                            input type="text" id="debtor" name="debtor" required;
-                            label for="phone" { (ui::t(lang, "pos.phone")) }
-                            input type="text" id="phone" name="phone" dir="ltr";
-                            button.btn.btn-ghost.btn-block type="submit" style="margin-block-start:.5rem" {
-                                (ui::t(lang, "pos.credit"))
+                        div.sell-actions {
+                            form method="post" action="/checkout" {
+                                button.btn.btn-primary.btn-block.btn-lg type="submit"
+                                       name="payment" value="cash" {
+                                    (ui::t(lang, "pos.charge"))
+                                }
+                            }
+                            div.split {
+                                form method="post" action="/checkout" {
+                                    input type="hidden" name="payment" value="card";
+                                    button.btn.btn-block type="submit" { (ui::t(lang, "pos.card")) }
+                                }
+                                form method="post" action="/checkout" {
+                                    input type="hidden" name="payment" value="credit";
+                                    button.btn.btn-block type="submit" { (ui::t(lang, "pos.credit")) }
+                                }
+                            }
+                            details.no-print {
+                                summary.muted style="cursor:pointer;padding-block:.35rem" {
+                                    (ui::t(lang, "pos.credit")) " — nom du client"
+                                }
+                                form method="post" action="/checkout" {
+                                    input type="hidden" name="payment" value="credit";
+                                    label for="debtor" { (ui::t(lang, "pos.debtor")) }
+                                    input type="text" id="debtor" name="debtor";
+                                    label for="phone" { (ui::t(lang, "pos.phone")) }
+                                    input type="text" id="phone" name="phone" dir="ltr";
+                                    button.btn.btn-block type="submit" style="margin-block-start:.5rem" {
+                                        (ui::t(lang, "pos.credit"))
+                                    }
+                                }
                             }
                         }
                     }

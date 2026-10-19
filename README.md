@@ -29,7 +29,8 @@ Current version: **v0.5** — a till you can run a full day on, plus the cloud h
 | Single Rust binary, local server on `127.0.0.1:8642`, no Node, no DB server | ✅ |
 | Server-rendered UI — **maud macros in `.rs` files, no `.html` anywhere** (ADR-014) | ✅ |
 | French / Arabic (RTL) / English, one tap to switch | ✅ |
-| Light + dark theme, persisted per device | ✅ |
+| Light + dark theme (rebuilt palette), persisted per device | ✅ |
+| Bismillah rendered in its own strip under the app bar | ✅ |
 | Bismillah masthead (Amiri/naskh stack) on every page | ✅ |
 | First run: 3 plain questions → a working till with 6 sample products | ✅ |
 | Owner password (Argon2id), session ids stored hashed | ✅ |
@@ -158,6 +159,7 @@ If the build stops again, paste the error: it will be a concrete API detail, not
 
 | Version | What landed |
 |---|---|
+| **v0.5.1** | Visual rebuild: new light/dark palette (warm paper / deep slate), no side rail, Bismillah moved under the app bar, two-column POS, new cart panel — see `docs/assets/design-pos-{light,dark}.png` |
 | **v0.5** | Renamed to **OneClick**; docs + UI + migrations aligned; version bumped across the workspace |
 | v0.2 | Product edit/archive, audit everywhere + « Qui a fait quoi », cash session + Z report, printable receipt, free debts & write-offs, cloud control plane |
 | v0.1 | First slice: workspace, server-rendered maud UI, offline till, sales, stock ledger, credit sales, carnet, Argon2id auth, fr/ar/en, dark mode |

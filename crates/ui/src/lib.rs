@@ -141,6 +141,9 @@ fn fr(key: &str) -> &'static str {
         "nav.carnet" => "Carnet",
         "nav.settings" => "Réglages",
         "nav.logout" => "Sortir",
+        "nav.menu" => "Menu",
+        "nav.session" => "Caisse / Z",
+        "nav.journal" => "Journal",
         "common.save" => "Enregistrer",
         "common.cancel" => "Annuler",
         "common.total" => "Total",
@@ -153,6 +156,7 @@ fn fr(key: &str) -> &'static str {
         "common.ok" => "OK",
         "pos.search" => "Scannez un produit ou tapez son nom",
         "pos.charge" => "Encaisser",
+        "pos.articles" => "articles",
         "pos.cash" => "Espèces",
         "pos.card" => "Carte",
         "pos.credit" => "À crédit",
@@ -218,6 +222,7 @@ fn ar(key: &str) -> Option<&'static str> {
         "common.ok" => "حسناً",
         "pos.search" => "امسح منتجاً أو اكتب اسمه",
         "pos.charge" => "تسجيل البيع",
+        "pos.articles" => "قطعة",
         "pos.cash" => "نقداً",
         "pos.card" => "بطاقة",
         "pos.credit" => "بالدين",
@@ -283,6 +288,7 @@ fn en(key: &str) -> Option<&'static str> {
         "common.ok" => "OK",
         "pos.search" => "Scan a product or type its name",
         "pos.charge" => "Charge",
+        "pos.articles" => "items",
         "pos.cash" => "Cash",
         "pos.card" => "Card",
         "pos.credit" => "On credit",
@@ -353,6 +359,12 @@ pub struct Chrome {
 
 pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     let lang = chrome.lang;
+    let shop = if chrome.shop.is_empty() {
+        APP_NAME.to_string()
+    } else {
+        chrome.shop.clone()
+    };
+
     html! {
         (DOCTYPE)
         html lang=(lang.code()) dir=(lang.dir()) data-theme=(chrome.theme.as_str()) {
@@ -364,41 +376,77 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                 link rel="stylesheet" href="/assets/store.css";
             }
             body {
-                div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
-
-                header.header {
-                    span.brand { (APP_NAME) }
-                    @if !chrome.shop.is_empty() {
-                        span.shop { (chrome.shop) }
-                    }
-                    span.spacer {}
-                    a.btn.btn-ghost href="/theme" title=(t(lang, "theme.toggle")) {
-                        @if chrome.theme == Theme::Dark { "☀" } @else { "☾" }
-                    }
-                    @if let Some(name) = &chrome.user {
-                        span.who { (name.as_str()) }
-                        form method="post" action="/logout" {
-                            button.btn.btn-ghost type="submit" { (t(lang, "nav.logout")) }
+                header.appbar {
+                    a.brand href="/" {
+                        div.brand-tile { "1C" }
+                        div {
+                            div.brand-name { (shop) }
+                            @if let Some(name) = &chrome.user {
+                                div.brand-sub { (name.as_str()) }
+                            }
                         }
                     }
-                }
 
-                @if let Some(active) = chrome.active {
-                    nav.nav {
-                        @for item in Nav::ALL {
-                            a href=(item.href()) class=(if item == active { "active" } else { "" }) {
-                                (t(lang, item.key()))
-                                @if item == Nav::Sell && chrome.cart_count > 0 {
-                                    " · " (chrome.cart_count)
+                    @if let Some(active) = chrome.active {
+                        nav.nav-tabs {
+                            @for item in Nav::ALL {
+                                a href=(item.href()) class=(if item == active { "active" } else { "" }) {
+                                    span.label { (t(lang, item.key())) }
+                                    @if item == Nav::Sell && chrome.cart_count > 0 {
+                                        span.count { (chrome.cart_count) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    div.appbar-actions {
+                        a.icon-btn href=(format!("/lang/{}", next_lang(lang).code()))
+                            title=(lang.label()) { (lang.code().to_uppercase()) }
+
+                        a.icon-btn href="/theme" title=(t(lang, "theme.toggle")) {
+                            @if chrome.theme == Theme::Dark {
+                                span.icon-sun {}
+                            } @else {
+                                span.icon-moon {}
+                            }
+                        }
+
+                        details.menu {
+                            summary.icon-btn aria-label=(t(lang, "nav.menu")) { "⋯" }
+                            div.menu-panel {
+                                @if let Some(name) = &chrome.user {
+                                    div.who { (name.as_str()) }
+                                }
+                                a href="/session" { (t(lang, "nav.session")) }
+                                a href="/journal" { (t(lang, "nav.journal")) }
+                                a href="/settings" { (t(lang, "nav.settings")) }
+                                @if chrome.user.is_some() {
+                                    form method="post" action="/logout" {
+                                        button type="submit" { (t(lang, "nav.logout")) }
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
+                /* Bismillah sits under the header, never over the page content. */
+                div.bismillah-bar {
+                    div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
+                }
+
                 main.wrap { (body) }
             }
         }
+    }
+}
+
+fn next_lang(lang: Lang) -> Lang {
+    match lang {
+        Lang::Fr => Lang::Ar,
+        Lang::Ar => Lang::En,
+        Lang::En => Lang::Fr,
     }
 }
 
@@ -414,9 +462,13 @@ pub fn auth_page(lang: Lang, theme: Theme, title: &str, body: Markup) -> Markup 
                 title { (title) " — " (APP_NAME) }
                 link rel="stylesheet" href="/assets/store.css";
             }
-            body {
-                div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
-                div.auth.card.card-pad { (body) }
+            body.auth-shell {
+                div.auth {
+                    div.bismillah-bar {
+                        div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
+                    }
+                    (body)
+                }
             }
         }
     }
@@ -457,12 +509,13 @@ pub struct ProductView<'a> {
 
 /// The whole card is the button: one tap adds the product (DESIGN-002 R2).
 pub fn product_card(product: &ProductView<'_>) -> Markup {
-    let initial = product
+    let initial: String = product
         .name
-        .chars()
-        .next()
+        .split_whitespace()
+        .take(2)
+        .filter_map(|word| word.chars().next())
         .map(|c| c.to_uppercase().to_string())
-        .unwrap_or_else(|| "?".to_string());
+        .collect();
     let low = product.stock <= 0;
     html! {
         form method="post" action="/cart/add" {
@@ -472,7 +525,7 @@ pub fn product_card(product: &ProductView<'_>) -> Markup {
                 div.name { (product.name) }
                 div.price { (money(product.price)) }
                 div class=(if low { "stock low" } else { "stock" }) {
-                    @if low { "Stock : 0" } @else { "Stock : " (product.stock) }
+                    @if low { "Rupture" } @else { (product.stock) " en stock" }
                 }
             }
         }
@@ -490,26 +543,25 @@ pub struct DraftView<'a> {
 pub fn draft_row(line: &DraftView<'_>, lang: Lang) -> Markup {
     html! {
         div.cart-line {
-            div {
-                div.title { (line.name) }
-                form method="post" action="/cart/qty" {
-                    input type="hidden" name="product_id" value=(line.product_id);
-                    div.stepper {
-                        button type="submit" name="qty" value=(line.qty - 1) aria-label="-" { "−" }
-                        span.qty { (line.qty) }
-                        button type="submit" name="qty" value=(line.qty + 1) aria-label="+" { "+" }
-                    }
-                }
-                form method="post" action="/cart/price" {
-                    input type="hidden" name="product_id" value=(line.product_id);
-                    div.stepper {
-                        input type="text" name="unit_price" dir="ltr" value=(format_money(line.unit_price));
-                        button type="submit" { (t(lang, "common.ok")) }
-                    }
+            div.title { (line.name) }
+            div.line-total.money { (format_money(line.line_total)) }
+
+            form method="post" action="/cart/qty" {
+                input type="hidden" name="product_id" value=(line.product_id);
+                div.stepper {
+                    button type="submit" name="qty" value=(line.qty - 1) aria-label="-" { "−" }
+                    span.qty { (line.qty) }
+                    button type="submit" name="qty" value=(line.qty + 1) aria-label="+" { "+" }
                 }
             }
-            div.money-cell {
-                div.money { (format_money(line.line_total)) }
+
+            form method="post" action="/cart/price" {
+                input type="hidden" name="product_id" value=(line.product_id);
+                div.stepper {
+                    input type="text" name="unit_price" dir="ltr"
+                          value=(format_money(line.unit_price)) aria-label=(t(lang, "common.price"));
+                    button type="submit" aria-label=(t(lang, "common.ok")) { "✓" }
+                }
             }
         }
     }

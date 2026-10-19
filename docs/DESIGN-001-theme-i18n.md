@@ -206,3 +206,43 @@ Hover must never reveal essential information (tablets have none). All interacti
 3. **Languages in v1:** `fr` + `en` first (Arabic at M7), or all three at launch? *(Recommendation: fr/en live, ar reviewed before first sale to a shop that wants it.)*
 4. **Arabic receipts:** needed in v1? If yes, that's the raster-print path and **+3 days** in M8 — worth knowing now.
 5. **Brand:** keep the green/red/blue identity as-is, or move to a slightly deeper green (`#1E8E3E`) so white-on-green passes AA? *I'd keep `#41B14B` and use dark text — it preserves the look exactly.*
+
+---
+
+## Addendum — v0.6 visual rebuild (2026-10-20)
+
+The original tokens (green `#41B14B`, grey `#F1F1F1` canvas, dark left rail) were
+replaced after review: the shop owner disliked both the palette and the layout.
+This addendum supersedes §2–§4 of the record above; the accessibility rules
+(44 px targets, 16 px text, money always LTR) still stand.
+
+### Palette
+
+| Token | Light | Dark |
+|---|---|---|
+| canvas | `#F7F5F0` warm paper | `#101519` deep slate (never pure black) |
+| surface | `#FFFFFF` | `#171E23` |
+| surface-3 (fields, thumbs) | `#F2EFE8` | `#212C33` |
+| hairline | `#E8E3D9` | `#26323A` |
+| ink | `#121614` | `#E9EEF1` |
+| muted | `#6C766F` | `#93A1AA` |
+| accent | `#0F7B5F` emerald | `#56D6A0` soft mint |
+| accent-soft | `#E7F2EC` | `#14251F` |
+| danger | `#B8402F` | `#F08B7E` |
+| warn | `#FBF0D8` / `#7D5511` | `#2A2418` / `#E4C07C` |
+
+Rules: no pure black anywhere; dark elevation comes from a lighter surface plus a
+hairline, never from heavy shadows; the mint accent never glows.
+
+### Layout
+
+* **No side rail.** A 70 px app bar carries brand, four tabs, language, theme and a
+  menu (Caisse/Z, Journal, Réglages, Sortir).
+* **Bismillah has its own strip directly under the app bar**, centred, Amiri/naskh
+  stack — it is never layered over the working area.
+* **POS = two columns**: product grid (`auto-fill, minmax(178px, 1fr)`) and a 384 px
+  cart panel that is sticky, scrollable in its lines, with the total and the single
+  primary « Encaisser » button pinned to the bottom.
+* Product cards: monogram tile (no photo needed), name clamped to 2 lines, price,
+  stock line; « Rupture » becomes an amber pill.
+* Print: 80 mm receipt, chrome hidden.
