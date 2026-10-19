@@ -1262,6 +1262,56 @@ pub fn write_off_debt(conn: &Connection, actor: &User, debt_id: &str, reason: &s
     Ok(())
 }
 
+
+// ---------------------------------------------------------------------------
+// Sales list — the shop's day book (needed for reprints and for "Ventes")
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct SaleRow {
+    pub id: String,
+    pub number: String,
+    pub created_at: String,
+    pub total: i64,
+    pub credit: i64,
+    pub payment: String,
+    pub seller: String,
+}
+
+pub fn recent_sales(conn: &Connection, limit: i64) -> Result<Vec<SaleRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.id, s.number, s.created_at, s.total, s.credit, s.payment, u.name
+           FROM sales s JOIN users u ON u.id = s.user_id
+          ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |r| {
+        Ok(SaleRow {
+            id: r.get(0)?,
+            number: r.get(1)?,
+            created_at: r.get(2)?,
+            total: r.get(3)?,
+            credit: r.get(4)?,
+            payment: r.get(5)?,
+            seller: r.get(6)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+pub fn day_totals(conn: &Connection) -> Result<(i64, i64, i64)> {
+    let day = today_key();
+    Ok(conn.query_row(
+        "SELECT COALESCE(SUM(total), 0), COALESCE(SUM(paid), 0), COUNT(*)
+           FROM sales WHERE business_day = ?1",
+        params![day],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?)
+}
+
 pub fn default_data_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("data")
 }

@@ -246,3 +246,21 @@ hairline, never from heavy shadows; the mint accent never glows.
 * Product cards: monogram tile (no photo needed), name clamped to 2 lines, price,
   stock line; « Rupture » becomes an amber pill.
 * Print: 80 mm receipt, chrome hidden.
+
+### v0.6 addendum — sidebar
+
+The top app bar was replaced by a **persistent 262 px sidebar** because the shop
+owner asked for sales, debts, search and a fast sell action to be reachable at all
+times:
+
+1. brand (shop name + who is logged in)
+2. **Vente rapide** — full-width primary button, the first thing in reach
+3. **search / scan field**, autofocused on the till screen so a barcode reader types
+   straight into it; on other screens it stays as a normal search
+4. group **Caisse**: Vendre · Ventes · Carnet · Produits
+5. group **Gestion**: Caisse / Z · Journal · Réglages
+6. footer: language · theme · menu (the same three destinations plus Sortir)
+
+The Bismillah strip stays **under the header line**, inside the main column.
+Below 900 px the sidebar collapses into a wrapping top strip (search full-width,
+nav horizontally scrollable) — no hamburger, nothing hidden.

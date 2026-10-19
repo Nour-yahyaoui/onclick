@@ -62,6 +62,7 @@ pub fn routes(state: AppState) -> Router {
         .route("/setup", get(setup_page).post(setup_submit))
         .route("/theme", get(toggle_theme))
         .route("/lang/{code}", get(set_lang))
+        .route("/sales", get(sales_page))
         .route("/products", get(products_page))
         .route("/products/new", get(product_new_page).post(product_create))
         .route("/products/{id}/edit", get(product_edit_page).post(product_update))
@@ -242,6 +243,7 @@ fn render_index(
                 " · " (tickets) " " (ui::t(lang, "pos.tickets"))
             }
             span.spacer {}
+            a.btn.btn-ghost href="/products/new" { (ui::t(lang, "pos.new_product")) }
             @if let Some(session) = &session {
                 a.btn.btn-ghost href="/session" {
                     "Caisse ouverte depuis " (session.opened_at.get(11..16).unwrap_or(""))
@@ -253,14 +255,6 @@ fn render_index(
 
         div.pos {
             section.pos-main {
-                form.scan method="get" action="/" {
-                    input type="search" name="q" dir="ltr"
-                          placeholder=(ui::t(lang, "pos.search"))
-                          value=(query.unwrap_or(""))
-                          autofocus;
-                    a.btn href="/products/new" { (ui::t(lang, "pos.new_product")) }
-                }
-
                 @if products.is_empty() {
                     div.card.card-pad {
                         (ui::empty_state(ui::t(lang, "products.empty")))
@@ -624,6 +618,85 @@ async fn product_create(
 
     match storage::create_product(&conn, &user, form.name.trim(), barcode, price, cost, qty) {
         Ok(_) => Redirect::to("/products").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sales — the day book (reprint a ticket, see what was taken)
+// ---------------------------------------------------------------------------
+
+async fn sales_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let rows = storage::recent_sales(&conn, 100)?;
+        let (revenue, _paid, tickets) = storage::day_totals(&conn)?;
+
+        let body = html! {
+            div.page-head {
+                h1 { (ui::t(lang, "nav.sales")) }
+                span.muted {
+                    (ui::t(lang, "pos.today")) " " (ui::money_tnd(revenue))
+                    " · " (tickets) " " (ui::t(lang, "pos.tickets"))
+                }
+            }
+
+            @if rows.is_empty() {
+                div.card.card-pad { (ui::empty_state("Aucune vente pour le moment.")) }
+            } @else {
+                div.card {
+                    table.list {
+                        thead {
+                            tr {
+                                th { "N°" }
+                                th { "Heure" }
+                                th { "Paiement" }
+                                th { "Qui" }
+                                th.money-cell { "Total" }
+                                th { "" }
+                            }
+                        }
+                        tbody {
+                            @for sale in &rows {
+                                tr {
+                                    td.muted dir="ltr" { (sale.number) }
+                                    td dir="ltr" { (sale.created_at.get(11..16).unwrap_or("")) }
+                                    td {
+                                        @if sale.credit > 0 {
+                                            span.pill.credit { (ui::t(lang, "pos.credit")) }
+                                        } @else if sale.payment == "card" {
+                                            span.pill { (ui::t(lang, "pos.card")) }
+                                        } @else {
+                                            span.pill { (ui::t(lang, "pos.cash")) }
+                                        }
+                                    }
+                                    td.muted { (sale.seller) }
+                                    td.money-cell { (ui::money(sale.total)) }
+                                    td {
+                                        a.btn.btn-ghost href=(format!("/receipt/{}", sale.id)) {
+                                            "Ticket"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Sales, 0, ui::t(lang, "nav.sales")),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
         Err(err) => failure(lang, err),
     }
 }

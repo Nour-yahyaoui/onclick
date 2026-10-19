@@ -103,6 +103,7 @@ impl Theme {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Nav {
     Sell,
+    Sales,
     Products,
     Carnet,
     Settings,
@@ -112,6 +113,7 @@ impl Nav {
     fn href(self) -> &'static str {
         match self {
             Nav::Sell => "/",
+            Nav::Sales => "/sales",
             Nav::Products => "/products",
             Nav::Carnet => "/carnet",
             Nav::Settings => "/settings",
@@ -121,13 +123,14 @@ impl Nav {
     fn key(self) -> &'static str {
         match self {
             Nav::Sell => "nav.sell",
+            Nav::Sales => "nav.sales",
             Nav::Products => "nav.products",
             Nav::Carnet => "nav.carnet",
             Nav::Settings => "nav.settings",
         }
     }
 
-    const ALL: [Nav; 4] = [Nav::Sell, Nav::Products, Nav::Carnet, Nav::Settings];
+    const ALL: [Nav; 5] = [Nav::Sell, Nav::Sales, Nav::Products, Nav::Carnet, Nav::Settings];
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +141,11 @@ fn fr(key: &str) -> &'static str {
     match key {
         "nav.sell" => "Vendre",
         "nav.products" => "Produits",
+        "nav.sales" => "Ventes",
+        "nav.quick_sell" => "Vente rapide",
+        "nav.search" => "Chercher ou scanner…",
+        "nav.group_sell" => "Caisse",
+        "nav.group_manage" => "Gestion",
         "nav.carnet" => "Carnet",
         "nav.settings" => "Réglages",
         "nav.logout" => "Sortir",
@@ -207,6 +215,11 @@ fn ar(key: &str) -> Option<&'static str> {
     Some(match key {
         "nav.sell" => "بيع",
         "nav.products" => "المنتجات",
+        "nav.sales" => "المبيعات",
+        "nav.quick_sell" => "بيع سريع",
+        "nav.search" => "ابحث أو امسح…",
+        "nav.group_sell" => "الصندوق",
+        "nav.group_manage" => "الإدارة",
         "nav.carnet" => "الديون",
         "nav.settings" => "الإعدادات",
         "nav.logout" => "خروج",
@@ -273,6 +286,11 @@ fn en(key: &str) -> Option<&'static str> {
     Some(match key {
         "nav.sell" => "Sell",
         "nav.products" => "Products",
+        "nav.sales" => "Sales",
+        "nav.quick_sell" => "Quick sale",
+        "nav.search" => "Search or scan…",
+        "nav.group_sell" => "Till",
+        "nav.group_manage" => "Manage",
         "nav.carnet" => "Debts",
         "nav.settings" => "Settings",
         "nav.logout" => "Sign out",
@@ -364,6 +382,21 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     } else {
         chrome.shop.clone()
     };
+    let active = chrome.active;
+
+    let item = |nav: Nav| {
+        let is_active = active == Some(nav);
+        html! {
+            a.nav-item href=(nav.href())
+              class=(if is_active { "nav-item active" } else { "nav-item" })
+              aria-current=(if is_active { "page" } else { "false" }) {
+                span.nav-label { (t(lang, nav.key())) }
+                @if nav == Nav::Sell && chrome.cart_count > 0 {
+                    span.count { (chrome.cart_count) }
+                }
+            }
+        }
+    };
 
     html! {
         (DOCTYPE)
@@ -376,67 +409,86 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                 link rel="stylesheet" href="/assets/store.css";
             }
             body {
-                header.appbar {
-                    a.brand href="/" {
-                        div.brand-tile { "1C" }
-                        div {
-                            div.brand-name { (shop) }
-                            @if let Some(name) = &chrome.user {
-                                div.brand-sub { (name.as_str()) }
-                            }
-                        }
-                    }
-
-                    @if let Some(active) = chrome.active {
-                        nav.nav-tabs {
-                            @for item in Nav::ALL {
-                                a href=(item.href()) class=(if item == active { "active" } else { "" }) {
-                                    span.label { (t(lang, item.key())) }
-                                    @if item == Nav::Sell && chrome.cart_count > 0 {
-                                        span.count { (chrome.cart_count) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    div.appbar-actions {
-                        a.icon-btn href=(format!("/lang/{}", next_lang(lang).code()))
-                            title=(lang.label()) { (lang.code().to_uppercase()) }
-
-                        a.icon-btn href="/theme" title=(t(lang, "theme.toggle")) {
-                            @if chrome.theme == Theme::Dark {
-                                span.icon-sun {}
-                            } @else {
-                                span.icon-moon {}
-                            }
-                        }
-
-                        details.menu {
-                            summary.icon-btn aria-label=(t(lang, "nav.menu")) { "⋯" }
-                            div.menu-panel {
+                div.shell {
+                    aside.sidebar {
+                        a.brand href="/" {
+                            div.brand-tile { "1C" }
+                            div {
+                                div.brand-name { (shop) }
                                 @if let Some(name) = &chrome.user {
-                                    div.who { (name.as_str()) }
+                                    div.brand-sub { (name.as_str()) }
                                 }
-                                a href="/session" { (t(lang, "nav.session")) }
-                                a href="/journal" { (t(lang, "nav.journal")) }
-                                a href="/settings" { (t(lang, "nav.settings")) }
-                                @if chrome.user.is_some() {
-                                    form method="post" action="/logout" {
-                                        button type="submit" { (t(lang, "nav.logout")) }
+                            }
+                        }
+
+                        /* Quick sell: always the first thing in reach */
+                        a.btn.btn-primary.btn-block.quick-sell href="/" {
+                            span.plus aria-hidden="true" { "+" }
+                            (t(lang, "nav.quick_sell"))
+                        }
+
+                        form.side-search method="get" action="/" role="search" {
+                            input type="search" name="q" dir="ltr"
+                                  placeholder=(t(lang, "nav.search"))
+                                  aria-label=(t(lang, "nav.search"))
+                                  autofocus[active == Some(Nav::Sell)];
+                        }
+
+                        nav.side-nav aria-label=(t(lang, "nav.group_sell")) {
+                            div.nav-group {
+                                div.nav-title { (t(lang, "nav.group_sell")) }
+                                (item(Nav::Sell))
+                                (item(Nav::Sales))
+                                (item(Nav::Carnet))
+                                (item(Nav::Products))
+                            }
+                            div.nav-group {
+                                div.nav-title { (t(lang, "nav.group_manage")) }
+                                a.nav-item href="/session" { span.nav-label { (t(lang, "nav.session")) } }
+                                a.nav-item href="/journal" { span.nav-label { (t(lang, "nav.journal")) } }
+                                (item(Nav::Settings))
+                            }
+                        }
+
+                        div.side-foot {
+                            a.icon-btn href=(format!("/lang/{}", next_lang(lang).code()))
+                                title=(lang.label()) { (lang.code().to_uppercase()) }
+
+                            a.icon-btn href="/theme" title=(t(lang, "theme.toggle")) {
+                                @if chrome.theme == Theme::Dark {
+                                    span.icon-sun {}
+                                } @else {
+                                    span.icon-moon {}
+                                }
+                            }
+
+                            details.menu.up {
+                                summary.icon-btn aria-label=(t(lang, "nav.menu")) { "⋯" }
+                                div.menu-panel {
+                                    @if let Some(name) = &chrome.user {
+                                        div.who { (name.as_str()) }
+                                    }
+                                    a href="/session" { (t(lang, "nav.session")) }
+                                    a href="/journal" { (t(lang, "nav.journal")) }
+                                    a href="/settings" { (t(lang, "nav.settings")) }
+                                    @if chrome.user.is_some() {
+                                        form method="post" action="/logout" {
+                                            button type="submit" { (t(lang, "nav.logout")) }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                /* Bismillah sits under the header, never over the page content. */
-                div.bismillah-bar {
-                    div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
+                    div.main-col {
+                        /* Bismillah sits under the header, never over the content. */
+                        div.bismillah-bar {
+                            div.bismillah dir="rtl" lang="ar" { (BISMILLAH) }
+                        }
+                        main.wrap { (body) }
+                    }
                 }
-
-                main.wrap { (body) }
             }
         }
     }
