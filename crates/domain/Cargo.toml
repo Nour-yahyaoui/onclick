@@ -1,6 +1,6 @@
 [package]
 name = "domain"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "Pure business logic: money, cart maths, VAT. No I/O."
 

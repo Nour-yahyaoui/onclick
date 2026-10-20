@@ -58,12 +58,22 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Copy-Item target/release/store.exe "$stage/store.exe"
           Copy-Item README.md "$stage/LISEZMOI.md"
+          Copy-Item assets/oneclick.ico "$stage/OneClick.ico"
 
           # Lanceur pour les non-informaticiens : double-clic, le navigateur s'ouvre.
+          # OneClick.bat is the everyday door (it says who published the app);
+          # store.exe --open is the same thing in one step.
           $bat = @"
           @echo off
           title OneClick
           cd /d "%~dp0"
+          echo.
+          echo   OneClick - la caisse du magasin
+          echo.
+          echo   Une fenetre noire s'ouvre : c'est la caisse qui tourne.
+          echo   Ne la fermez pas pendant la journee.
+          echo   Le navigateur va s'ouvrir sur http://localhost:8642
+          echo.
           start "" store.exe
           ping -n 3 127.0.0.1 >nul
           start "" http://localhost:8642
@@ -84,6 +94,13 @@ jobs:
           sauvegarde.
 
           Ne pas supprimer "data" : c'est votre caisse.
+
+          Pour un raccourci sur le Bureau :
+          clic droit sur OneClick.bat > Envoyer vers > Bureau (creer un raccourci).
+          Important : Windows demandera "Windows a protege votre PC" au premier
+          lancement, parce que le fichier n'est pas signe. Cliquez sur
+          "Informations complementaires" puis "Executer quand meme".
+          Cela n'arrive qu'une fois, si vous gardez le fichier au meme endroit.
           "@
           Set-Content -Encoding ASCII -Path "$stage/A_LIRE.txt" -Value $note
 

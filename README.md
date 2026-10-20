@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v1.0.1** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v1.0.2** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -16,7 +16,9 @@ Télécharger le zip de la dernière version :
 double-cliquer sur **`OneClick.bat`**. Rien d'autre à installer ; les données restent
 dans `data\`, à côté de `store.exe`.
 
-Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.md)
+Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.md).
+Icône, démarrage et alerte SmartScreen (« Windows a protégé votre PC ») :
+[`docs/OPS-003-windows-startup.md`](docs/OPS-003-windows-startup.md)
 (un tag `vX.Y.Z` suffit — GitHub construit le `.exe` et publie la release).
 
 ---
@@ -218,6 +220,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v1.0.2** | **Icône OneClick gravée dans `store.exe`** (Explorateur, barre des tâches, raccourcis) + fiche du fichier renseignée ; `store --open` démarre et ouvre le navigateur ; la fenêtre noire ne survit plus à l'app. Note honnête sur l'alerte SmartScreen dans `OPS-003` |
 | **v1.0.1** | **Sauvegarde réelle** (bouton « Sauvegarder maintenant », copie cohérente via `VACUUM INTO`, 14 dernières gardées) ; le réglage ne promet plus « sauvegarde automatique chaque soir » ni un chiffrement qui n'existe pas |
 | **v1.0** | **Sell what you never entered.** Scanning an unknown barcode no longer fails: name (optional) + price only, the sheet is created and goes straight into the sale; unnamed items show as « Code 123456 » and never as « rupture ». Product sheets show what they really sold, so prices settle over time. **Charges**: rent, water, power, maintenance — each with its own rhythm (month, quarter, year) and a per-day break-even |
 | **v0.6.2** | **Control plane compiles again** (`tokio-postgres` was missing the `chrono` feature, so every `DATE` column failed to map) ; the cloud half can no longer paint the shop's pipeline red |
