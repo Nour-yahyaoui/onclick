@@ -1267,6 +1267,10 @@ struct NamePath {
 }
 
 /// Accepts three intents in one POST: a new file, a built-in picture, or none.
+///
+/// The body is read *before* the database lock is taken: a `std::sync::Mutex`
+/// guard held across an `.await` makes the handler future non-`Send`, and axum
+/// then refuses the handler outright.
 async fn product_photo(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1274,15 +1278,11 @@ async fn product_photo(
     mut multipart: Multipart,
 ) -> Response {
     let lang = lang_of(&headers);
-    let conn = state.db.lock().unwrap();
-    let Some(user) = user_of(&conn, &headers) else {
-        return Redirect::to("/login").into_response();
-    };
 
     let mut chosen_default: Option<String> = None;
     let mut uploaded: Option<Vec<u8>> = None;
     let mut clear = false;
-    let mut failure_note: Option<&str> = None;
+    let mut bad_format = false;
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or_default().to_string();
@@ -1296,34 +1296,36 @@ async fn product_photo(
                 }
             }
             "clear" => clear = true,
-            "file" => {
-                // A phone photo can be 4 MB; the limit is enforced by the router.
-                match field.bytes().await {
-                    Ok(bytes) if !bytes.is_empty() => {
-                        if storage::image_extension(&bytes).is_some() {
-                            uploaded = Some(bytes.to_vec());
-                        } else {
-                            failure_note = Some("photo_format");
-                        }
+            "file" => match field.bytes().await {
+                Ok(bytes) if !bytes.is_empty() => {
+                    // Trust the first bytes, not the file name: a phone photo
+                    // is still called IMG_0042.
+                    if storage::image_extension(&bytes).is_some() {
+                        uploaded = Some(bytes.to_vec());
+                    } else {
+                        bad_format = true;
                     }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
     }
 
-    if let Some(note) = failure_note {
-        let _ = note;
+    if bad_format {
         return Redirect::to(&format!("/products/{}?done=photo_bad", path.id)).into_response();
     }
+
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
 
     let outcome = if let Some(bytes) = uploaded {
         storage::save_product_photo(&conn, &user, &state.data_dir, &path.id, &bytes).map(|_| ())
     } else if let Some(key) = chosen_default {
         // Only the keys we actually ship are accepted.
-        let exists = DEFAULT_PHOTOS.iter().any(|(k, _)| *k == key);
-        if exists {
+        if DEFAULT_PHOTOS.iter().any(|(k, _)| *k == key) {
             storage::set_product_photo(&conn, &user, &path.id, Some(&format!("d:{key}")))
         } else {
             Ok(())

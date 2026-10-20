@@ -1,6 +1,6 @@
 [package]
 name = "store"
-version = "1.0.9"
+version = "1.0.10"
 edition = "2021"
 description = "OneClick — local-first shop management (single binary)"
 license = "proprietary"
