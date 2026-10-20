@@ -788,10 +788,15 @@ impl Nav {
     }
 }
 
-/// Extra glyphs for the sidebar destinations that are not in `Nav`.
+/// The sidebar's icon slot: same drawing as `icon()`, sized for the rail.
+fn nav_icon(name: &str) -> Markup {
+    html! {
+        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(1.8) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" { (PreEscaped(icons::paths(name))) }
+    }
+}
 
-
-/// Fold / unfold arrow for the sidebar toggle.
 /// One icon from the generated set (Lucide). Inherits the text colour, so the
 /// same call works on a green button and on a muted sidebar row.
 pub fn icon(name: &str) -> Markup {
