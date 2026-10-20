@@ -565,6 +565,43 @@ a:hover { text-decoration: underline; }
 }
 .wrap.narrow { max-inline-size: 720px; }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 14px;
+}
+.page-actions form {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.page-actions .reason-box { flex: 1 1 100%; inline-size: 100%; }
+
+.reason-box { display: grid; gap: 6px; margin-block-end: 8px; }
+.reason-box summary {
+  cursor: pointer;
+  font-size: .86rem;
+  color: var(--muted);
+}
+.reason-box textarea { min-block-size: 52px; }
+
+.qty-input {
+  inline-size: 78px;
+  min-block-size: 40px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.price-input {
+  inline-size: 130px;
+  min-block-size: 40px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
 .page-head {
   display: flex;
   align-items: baseline;
@@ -932,6 +969,11 @@ form:has(> .product) { display: contents; }
   font-weight: 650;
 }
 .pill.credit { background: var(--warn-bg); color: var(--warn-ink); }
+.pill.cancelled {
+  background: var(--hair);
+  color: var(--muted);
+  text-decoration: line-through;
+}
 
 .money {
   font-variant-numeric: tabular-nums;
@@ -1297,7 +1339,10 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
 @media print {
   @page { margin: 8mm; size: 80mm auto; }
   .toast, .overlay { display: none !important; }
-  .sidebar, .bismillah-bar, .menu, .no-print, .wrap > .page-head { display: none !important; }
+  .sidebar, .bismillah-bar, .menu, .no-print, .wrap > .page-actions {
+    display: none !important;
+  }
+  .page-head { display: none !important; }
   .auth-shell { background: #fff; padding: 0; min-block-size: auto; }
   .auth { inline-size: auto; max-inline-size: none; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
   body { background: #fff; color: #000; font-size: 12px; }

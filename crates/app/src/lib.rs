@@ -64,6 +64,9 @@ pub fn routes(state: AppState) -> Router {
         .route("/sidebar", get(toggle_sidebar))
         .route("/lang/{code}", get(set_lang))
         .route("/sales", get(sales_page))
+        .route("/sales/{id}", get(sale_detail_page))
+        .route("/sales/{id}/edit", get(sale_edit_page).post(sale_update))
+        .route("/sales/{id}/cancel", post(sale_cancel))
         .route("/products", get(products_page))
         .route("/products/new", get(product_new_page).post(product_create))
         .route("/products/{id}/edit", get(product_edit_page).post(product_update))
@@ -222,6 +225,8 @@ fn toast_text(lang: Lang, code: &str) -> Option<&'static str> {
         "written_off" => ui::t(lang, "toast.written_off"),
         "opened" => ui::t(lang, "toast.opened"),
         "closed" => ui::t(lang, "toast.closed"),
+        "edited" => ui::t(lang, "toast.edited"),
+        "cancelled" => ui::t(lang, "toast.cancelled"),
         _ => return None,
     };
     Some(text)
@@ -689,6 +694,277 @@ async fn product_create(
 }
 
 // ---------------------------------------------------------------------------
+// One sale: header, its items, edit, cancel (stock comes back)
+// ---------------------------------------------------------------------------
+
+async fn sale_detail_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    Query(query): Query<DoneQuery>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let notice = toast_from(&query, lang);
+    let result = (|| -> Result<Markup> {
+        let sale = storage::sale_detail(&conn, &path.id)?;
+        let cancelled = sale.status != "closed";
+
+        let body = html! {
+            @if let Some(toast) = notice { (toast) }
+
+            div.page-head {
+                h1 { (ui::t(lang, "sales.one")) " " (sale.number) }
+                span.muted dir="ltr" {
+                    (sale.created_at.get(0..16).unwrap_or(&sale.created_at))
+                }
+                span.spacer {}
+                a.btn.btn-ghost href="/sales" { (ui::t(lang, "sales.back")) }
+            }
+
+            div.card {
+                table.list {
+                    thead {
+                        tr {
+                            th { (ui::t(lang, "sales.item")) }
+                            th.money-cell { (ui::t(lang, "sales.qty")) }
+                            th.money-cell { (ui::t(lang, "sales.unit")) }
+                            th.money-cell { (ui::t(lang, "common.total")) }
+                        }
+                    }
+                    tbody {
+                        @for line in &sale.lines {
+                            tr {
+                                td { (line.name) }
+                                td.money-cell { (line.qty) }
+                                td.money-cell { (format_money(line.unit_price)) }
+                                td.money-cell { (format_money(line.line_total)) }
+                            }
+                        }
+                    }
+                }
+                div.card-pad {
+                    div.totals {
+                        div.grand {
+                            span { (ui::t(lang, "common.total")) }
+                            span.money dir="ltr" { (format_money(sale.total)) }
+                        }
+                    }
+                }
+            }
+
+            div.card.card-pad {
+                table.list {
+                    tbody {
+                        tr {
+                            td.muted { (ui::t(lang, "sales.seller")) }
+                            td { (sale.seller) }
+                        }
+                        tr {
+                            td.muted { (ui::t(lang, "sales.payment")) }
+                            td { (payment_label(lang, &sale.payment)) }
+                        }
+                        @if let Some(debtor) = &sale.debtor {
+                            tr { td.muted { (ui::t(lang, "sales.customer")) } td { (debtor) } }
+                        }
+                        @if sale.credit > 0 {
+                            tr {
+                                td.muted { (ui::t(lang, "carnet.paid")) }
+                                td.money-cell { (format_money(sale.paid)) }
+                            }
+                            tr {
+                                td.muted { (ui::t(lang, "carnet.balance")) }
+                                td.money-cell { (format_money(sale.credit)) }
+                            }
+                        }
+                        tr {
+                            td.muted { (ui::t(lang, "sales.status")) }
+                            td {
+                                @if cancelled {
+                                    span.pill.cancelled { (ui::t(lang, "sales.cancelled")) }
+                                } @else {
+                                    span.pill { (ui::t(lang, "sales.closed")) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @if !cancelled {
+                div.page-actions {
+                    a.btn.btn-primary href=(format!("/sales/{}/edit", sale.id)) {
+                        (ui::t(lang, "sales.edit"))
+                    }
+                    a.btn.btn-ghost href=(format!("/receipt/{}", sale.id)) {
+                        (ui::t(lang, "sales.ticket"))
+                    }
+                    form method="post" action=(format!("/sales/{}/cancel", sale.id))
+                         onsubmit=(format!(
+                            "return confirm('{}')",
+                            ui::t(lang, "sales.cancel_confirm")
+                         )) {
+                        details.reason-box {
+                            summary { (ui::t(lang, "sales.reason")) }
+                            textarea name="reason" rows="2" {}
+                        }
+                        button.btn.btn-danger type="submit" { (ui::t(lang, "sales.cancel")) }
+                    }
+                }
+                p.muted { (ui::t(lang, "sales.cancel_hint")) }
+            }
+        };
+
+        let title = format!("{} {}", ui::t(lang, "sales.one"), sale.number);
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Sales, 0, &title),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn sale_edit_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let result = (|| -> Result<Markup> {
+        let sale = storage::sale_detail(&conn, &path.id)?;
+        let body = html! {
+            div.page-head {
+                h1 { (ui::t(lang, "sales.edit_title")) " " (sale.number) }
+                span.spacer {}
+                a.btn.btn-ghost href=(format!("/sales/{}", sale.id)) {
+                    (ui::t(lang, "common.cancel"))
+                }
+            }
+
+            form method="post" action=(format!("/sales/{}/edit", sale.id)) {
+                div.card {
+                    table.list {
+                        thead {
+                            tr {
+                                th { (ui::t(lang, "sales.item")) }
+                                th.money-cell { (ui::t(lang, "sales.qty")) }
+                                th.money-cell { (ui::t(lang, "sales.unit")) }
+                            }
+                        }
+                        tbody {
+                            @for line in &sale.lines {
+                                tr {
+                                    td { (line.name) }
+                                    td.money-cell {
+                                        input.qty-input type="number" min="0" step="1"
+                                            name=(format!("qty_{}", line.id))
+                                            value=(line.qty) dir="ltr";
+                                    }
+                                    td.money-cell {
+                                        input.price-input type="text" dir="ltr" inputmode="decimal"
+                                            name=(format!("price_{}", line.id))
+                                            value=(format_money(line.unit_price));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                p.muted style="margin-block-start:10px" { (ui::t(lang, "sales.qty_hint")) }
+
+                div.page-actions {
+                    button.btn.btn-primary type="submit" { (ui::t(lang, "sales.save")) }
+                    a.btn.btn-ghost href=(format!("/sales/{}", sale.id)) { (ui::t(lang, "common.cancel")) }
+                }
+            }
+        };
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Sales, 0, ui::t(lang, "sales.edit_title")),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn sale_update(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    Form(form): Form<std::collections::HashMap<String, String>>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let mut changes: Vec<(String, i64, i64)> = Vec::new();
+    for (key, value) in &form {
+        if let Some(line_id) = key.strip_prefix("qty_") {
+            let qty: i64 = value.trim().parse().unwrap_or(1).max(0);
+            let price = form
+                .get(&format!("price_{line_id}"))
+                .and_then(|raw| parse_money(raw))
+                .unwrap_or(0);
+            changes.push((line_id.to_string(), qty, price));
+        }
+    }
+
+    match storage::update_sale(&conn, &user, &path.id, &changes) {
+        Ok(()) => Redirect::to(&format!("/sales/{}?done=edited", path.id)).into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn sale_cancel(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    Form(form): Form<std::collections::HashMap<String, String>>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let reason = form
+        .get("reason")
+        .map(|r| r.trim().to_string())
+        .filter(|r| !r.is_empty());
+    match storage::cancel_sale(&conn, &user, &path.id, reason.as_deref()) {
+        Ok(()) => Redirect::to(&format!("/sales/{}?done=cancelled", path.id)).into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+fn payment_label(lang: Lang, payment: &str) -> &'static str {
+    match payment {
+        "card" => ui::t(lang, "pos.card"),
+        "credit" => ui::t(lang, "pos.credit"),
+        _ => ui::t(lang, "pos.cash"),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sales — the day book (reprint a ticket, see what was taken)
 // ---------------------------------------------------------------------------
 
@@ -730,10 +1006,14 @@ async fn sales_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
                         tbody {
                             @for sale in &rows {
                                 tr {
-                                    td.muted dir="ltr" { (sale.number) }
+                                    td dir="ltr" {
+                                        a href=(format!("/sales/{}", sale.id)) { (sale.number) }
+                                    }
                                     td dir="ltr" { (sale.created_at.get(11..16).unwrap_or("")) }
                                     td {
-                                        @if sale.credit > 0 {
+                                        @if sale.status != "closed" {
+                                            span.pill.cancelled { (ui::t(lang, "sales.cancelled")) }
+                                        } @else if sale.credit > 0 {
                                             span.pill.credit { (ui::t(lang, "pos.credit")) }
                                         } @else if sale.payment == "card" {
                                             span.pill { (ui::t(lang, "pos.card")) }

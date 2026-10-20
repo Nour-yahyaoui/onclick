@@ -688,12 +688,12 @@ pub fn open_debts(conn: &Connection) -> Result<Vec<DebtRow>> {
     let mut stmt = conn.prepare(
         "SELECT d.id, d.debtor_name, d.debtor_phone, d.opened_day, d.principal_millimes,
                 COALESCE(SUM(CASE WHEN l.amount_millimes < 0 THEN -l.amount_millimes ELSE 0 END), 0),
-                d.principal_millimes + COALESCE(SUM(l.amount_millimes), 0)
+                COALESCE(SUM(l.amount_millimes), 0)
          FROM debts d
          LEFT JOIN debt_ledger l ON l.debt_id = d.id
          WHERE d.status = 'open'
          GROUP BY d.id
-         HAVING d.principal_millimes + COALESCE(SUM(l.amount_millimes), 0) > 0
+         HAVING COALESCE(SUM(l.amount_millimes), 0) > 0
          ORDER BY d.opened_day ASC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -736,10 +736,9 @@ pub fn collect(
         params![new_id(), debt_id, -amount, method, today_key(), now_iso(), actor.id],
     )?;
 
+    // The ledger is the truth: + at opening, - on every collection.
     let balance: i64 = tx.query_row(
-        "SELECT d.principal_millimes + COALESCE(SUM(l.amount_millimes), 0)
-           FROM debts d LEFT JOIN debt_ledger l ON l.debt_id = d.id
-          WHERE d.id = ?1 GROUP BY d.id",
+        "SELECT COALESCE(SUM(amount_millimes), 0) FROM debt_ledger WHERE debt_id = ?1",
         params![debt_id],
         |r| r.get(0),
     )?;
@@ -1236,7 +1235,7 @@ pub fn create_debt(
 
 pub fn write_off_debt(conn: &Connection, actor: &User, debt_id: &str, reason: &str) -> Result<()> {
     let (name, balance): (String, i64) = conn.query_row(
-        "SELECT d.debtor_name, d.principal_millimes + COALESCE(SUM(l.amount_millimes), 0)
+        "SELECT d.debtor_name, COALESCE(SUM(l.amount_millimes), 0)
            FROM debts d LEFT JOIN debt_ledger l ON l.debt_id = d.id
           WHERE d.id = ?1 GROUP BY d.id",
         params![debt_id],
@@ -1283,11 +1282,12 @@ pub struct SaleRow {
     pub credit: i64,
     pub payment: String,
     pub seller: String,
+    pub status: String,
 }
 
 pub fn recent_sales(conn: &Connection, limit: i64) -> Result<Vec<SaleRow>> {
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.number, s.created_at, s.total, s.credit, s.payment, u.name
+        "SELECT s.id, s.number, s.created_at, s.total, s.credit, s.payment, u.name, s.status
            FROM sales s JOIN users u ON u.id = s.user_id
           ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?1",
     )?;
@@ -1300,6 +1300,7 @@ pub fn recent_sales(conn: &Connection, limit: i64) -> Result<Vec<SaleRow>> {
             credit: r.get(4)?,
             payment: r.get(5)?,
             seller: r.get(6)?,
+            status: r.get(7)?,
         })
     })?;
     let mut out = Vec::new();
@@ -1313,10 +1314,338 @@ pub fn day_totals(conn: &Connection) -> Result<(i64, i64, i64)> {
     let day = today_key();
     Ok(conn.query_row(
         "SELECT COALESCE(SUM(total), 0), COALESCE(SUM(paid), 0), COUNT(*)
-           FROM sales WHERE business_day = ?1",
+           FROM sales WHERE business_day = ?1 AND status = 'closed'",
         params![day],
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?)
+}
+
+
+// ---------------------------------------------------------------------------
+// Sale detail / edit / cancel  (ADR-011: everything editable, all attributed)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct SaleLineRow {
+    pub id: String,
+    pub product_id: String,
+    pub name: String,
+    pub qty: i64,
+    pub unit_price: i64,
+    pub line_total: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SaleDetail {
+    pub id: String,
+    pub number: String,
+    pub created_at: String,
+    pub seller: String,
+    pub payment: String,
+    pub status: String,
+    pub total: i64,
+    pub paid: i64,
+    pub credit: i64,
+    pub lines: Vec<SaleLineRow>,
+    pub debtor: Option<String>,
+}
+
+pub fn sale_detail(conn: &Connection, sale_id: &str) -> Result<SaleDetail> {
+    let (number, created_at, seller, payment, status, total, paid, credit): (
+        String,
+        String,
+        String,
+        String,
+        String,
+        i64,
+        i64,
+        i64,
+    ) = conn.query_row(
+        "SELECT s.number, s.created_at, u.name, s.payment, s.status, s.total, s.paid, s.credit
+           FROM sales s JOIN users u ON u.id = s.user_id
+          WHERE s.id = ?1",
+        params![sale_id],
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+            ))
+        },
+    )?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, product_id, product_name, qty, unit_price, line_total
+           FROM sale_lines WHERE sale_id = ?1 ORDER BY rowid",
+    )?;
+    let rows = stmt.query_map(params![sale_id], |r| {
+        Ok(SaleLineRow {
+            id: r.get(0)?,
+            product_id: r.get(1)?,
+            name: r.get(2)?,
+            qty: r.get(3)?,
+            unit_price: r.get(4)?,
+            line_total: r.get(5)?,
+        })
+    })?;
+    let mut lines = Vec::new();
+    for row in rows {
+        lines.push(row?);
+    }
+
+    let debtor = conn
+        .query_row(
+            "SELECT debtor_name FROM debts WHERE sale_id = ?1 LIMIT 1",
+            params![sale_id],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?;
+
+    Ok(SaleDetail {
+        id: sale_id.to_string(),
+        number,
+        created_at,
+        seller,
+        payment,
+        status,
+        total,
+        paid,
+        credit,
+        lines,
+        debtor,
+    })
+}
+
+/// Edit quantities and unit prices of a closed sale.
+/// `changes` = (line id, new qty, new unit price). Quantity 0 removes the line.
+/// Stock is re-balanced by the difference, so the ledger always matches reality.
+pub fn update_sale(
+    conn: &Connection,
+    actor: &User,
+    sale_id: &str,
+    changes: &[(String, i64, i64)],
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    let (payment, status, old_total): (String, String, i64) = tx.query_row(
+        "SELECT payment, status, total FROM sales WHERE id = ?1",
+        params![sale_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    if status != "closed" {
+        return Err(anyhow!("sale_cancelled"));
+    }
+
+    let now = now_iso();
+    let day = today_key();
+
+    for (line_id, qty, unit_price) in changes {
+        let (product_id, old_qty, unit_cost): (String, i64, i64) = tx.query_row(
+            "SELECT product_id, qty, unit_cost FROM sale_lines WHERE id = ?1 AND sale_id = ?2",
+            params![line_id, sale_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+
+        let qty = (*qty).max(0);
+        let unit_price = (*unit_price).max(0);
+        let delta = old_qty - qty; // positive: stock comes back
+
+        if delta != 0 {
+            tx.execute(
+                "UPDATE products
+                    SET stock_qty = stock_qty + ?2, updated_at = ?3, updated_by = ?4,
+                        version = version + 1
+                  WHERE id = ?1",
+                params![product_id, delta, now, actor.id],
+            )?;
+            tx.execute(
+                "INSERT INTO stock_movements (id, product_id, kind, qty, unit_cost, day, created_at, user_id, ref_id)
+                 VALUES (?1, ?2, 'adjust', ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![new_id(), product_id, delta, unit_cost, day, now, actor.id, sale_id],
+            )?;
+        }
+
+        if qty == 0 {
+            tx.execute("DELETE FROM sale_lines WHERE id = ?1", params![line_id])?;
+        } else {
+            tx.execute(
+                "UPDATE sale_lines SET qty = ?2, unit_price = ?3, line_total = ?4 WHERE id = ?1",
+                params![line_id, qty, unit_price, qty * unit_price],
+            )?;
+        }
+    }
+
+    let (total, cost_total, remaining): (i64, i64, i64) = tx.query_row(
+        "SELECT COALESCE(SUM(line_total), 0), COALESCE(SUM(qty * unit_cost), 0), COUNT(*)
+           FROM sale_lines WHERE sale_id = ?1",
+        params![sale_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    if remaining == 0 {
+        return Err(anyhow!("sale_empty"));
+    }
+
+    // The ledger is the truth: a customer may already have paid part of a
+    // credit, so the new amount owed is `total - what was already paid` and
+    // the sale's `credit` must match it (otherwise the carnet would lie).
+    let debt: Option<(String, i64)> = tx
+        .query_row(
+            "SELECT id, principal_millimes FROM debts WHERE sale_id = ?1 LIMIT 1",
+            params![sale_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+
+    let mut balance = 0i64;
+    let mut already_paid = 0i64;
+    if let Some((debt_id, principal)) = &debt {
+        balance = tx.query_row(
+            "SELECT COALESCE(SUM(amount_millimes), 0) FROM debt_ledger WHERE debt_id = ?1",
+            params![debt_id],
+            |r| r.get(0),
+        )?;
+        already_paid = (principal - balance).max(0);
+    }
+
+    let credit = if payment == "credit" {
+        (total - already_paid).max(0)
+    } else {
+        0
+    };
+    let paid = total - credit;
+
+    if let Some((debt_id, _)) = &debt {
+        if credit != balance {
+            tx.execute(
+                "INSERT INTO debt_ledger (id, debt_id, kind, amount_millimes, method, day, at, user_id)
+                 VALUES (?1, ?2, 'adjustment', ?3, NULL, ?4, ?5, ?6)",
+                params![new_id(), debt_id, credit - balance, day, now, actor.id],
+            )?;
+        }
+        tx.execute(
+            "UPDATE debts SET principal_millimes = ?2, status = ?3 WHERE id = ?1",
+            params![debt_id, credit, if credit == 0 { "settled" } else { "open" }],
+        )?;
+    }
+
+    tx.execute(
+        "UPDATE sales SET total = ?2, cost_total = ?3, paid = ?4, credit = ?5 WHERE id = ?1",
+        params![sale_id, total, cost_total, paid, credit],
+    )?;
+
+    audit(
+        &tx,
+        actor,
+        "update",
+        "sale",
+        sale_id,
+        &format!(
+            "Vente modifiée — {} (avant {})",
+            domain::format_money_tnd(total),
+            domain::format_money_tnd(old_total)
+        ),
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Cancel a sale: stock returns to the shelf, the credit line is cleared, the
+/// sale stays in the history marked as cancelled (never silently deleted).
+pub fn cancel_sale(conn: &Connection, actor: &User, sale_id: &str, reason: Option<&str>) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    let (number, status, credit): (String, String, i64) = tx.query_row(
+        "SELECT number, status, credit FROM sales WHERE id = ?1",
+        params![sale_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    if status != "closed" {
+        return Err(anyhow!("sale_cancelled"));
+    }
+
+    let now = now_iso();
+    let day = today_key();
+
+    let lines: Vec<(String, i64, i64)> = {
+        let mut stmt = tx.prepare(
+            "SELECT product_id, qty, unit_cost FROM sale_lines WHERE sale_id = ?1",
+        )?;
+        let rows = stmt.query_map(params![sale_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+        })?;
+        let mut buf = Vec::new();
+        for row in rows {
+            buf.push(row?);
+        }
+        buf
+    };
+
+    for (product_id, qty, unit_cost) in lines {
+        tx.execute(
+            "UPDATE products
+                SET stock_qty = stock_qty + ?2, updated_at = ?3, updated_by = ?4, version = version + 1
+              WHERE id = ?1",
+            params![product_id, qty, now, actor.id],
+        )?;
+        tx.execute(
+            "INSERT INTO stock_movements (id, product_id, kind, qty, unit_cost, day, created_at, user_id, ref_id)
+             VALUES (?1, ?2, 'cancel', ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![new_id(), product_id, qty, unit_cost, day, now, actor.id, sale_id],
+        )?;
+    }
+
+    if credit > 0 {
+        let debt_id: Option<String> = tx
+            .query_row(
+                "SELECT id FROM debts WHERE sale_id = ?1 LIMIT 1",
+                params![sale_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(debt_id) = debt_id {
+            let balance: i64 = tx.query_row(
+                "SELECT COALESCE(SUM(amount_millimes), 0) FROM debt_ledger WHERE debt_id = ?1",
+                params![debt_id],
+                |r| r.get(0),
+            )?;
+            if balance != 0 {
+                tx.execute(
+                    "INSERT INTO debt_ledger (id, debt_id, kind, amount_millimes, method, day, at, user_id)
+                     VALUES (?1, ?2, 'cancel', ?3, NULL, ?4, ?5, ?6)",
+                    params![new_id(), debt_id, -balance, day, now, actor.id],
+                )?;
+            }
+            tx.execute(
+                "UPDATE debts SET status = 'cancelled' WHERE id = ?1",
+                params![debt_id],
+            )?;
+        }
+    }
+
+    tx.execute(
+        "UPDATE sales SET status = 'cancelled', note = ?2 WHERE id = ?1",
+        params![sale_id, reason],
+    )?;
+
+    audit(
+        &tx,
+        actor,
+        "cancel",
+        "sale",
+        sale_id,
+        &format!("Vente {number} annulée — stock remis en magasin"),
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(())
 }
 
 pub fn default_data_dir() -> PathBuf {

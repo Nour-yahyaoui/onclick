@@ -180,6 +180,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v0.5.9** | One sale, in full: every article with its quantity and price; **edit** a sale (stock is re-balanced by the difference); **cancel** a sale and the stock comes back to the shelf — the sale stays in the history. Debt maths fixed: the carnet no longer counts twice, cancelled sales leave the day total |
 | **v0.5.8** | Visible drag handle for the sidebar (replaces the invisible CSS grip), a real fold/unfold chevron, no scrollbar inside the rail |
 | **v0.5.7** | **Blank-page fix** (one grid column for two children), resizable sidebar, collapsible to an icon rail with every icon kept, nav icons |
 | **v0.5.6** | Login hint removed; the failed-login screen reuses the same card; version shown in the menu and via `store --version` |
