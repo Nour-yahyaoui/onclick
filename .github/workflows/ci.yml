@@ -35,22 +35,22 @@ jobs:
       # downloading a log.
       - name: Unit tests (domain money/cart/VAT)
         shell: bash
+        env:
+          CARGO_TERM_COLOR: never
         run: |
           set +e
           cargo test --all 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
-            {
-              echo "## Erreurs de compilation"
-              echo '```'
-              grep -nE "^(error|warning: unused)" -A3 build.log | head -120
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            # Everything that matters, as annotations: compiler errors AND test
-            # failures (a wrong number must be readable too, not just a red X).
-            grep -nE "^(error|---- |test result:|thread )" build.log | head -40 \
-              | while IFS= read -r line; do echo "::error::$line"; done
-            tail -40 build.log | while IFS= read -r line; do echo "::error::TAIL $line"; done
+            cp build.log failed-build.log
+            # GitHub keeps only 10 annotations per step: send the *real* errors,
+            # one per line, never the whole log.
+            grep -nE "^error(\[[A-Z0-9]+\])?:|test result: FAILED|panicked at|assertion .* failed|^---- " build.log \
+              | head -8 > errors.txt || true
+            if [ ! -s errors.txt ]; then tail -8 build.log > errors.txt; fi
+            sed 's/\x1b\[[0-9;]*m//g' errors.txt | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             exit 1
           fi
 
