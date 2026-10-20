@@ -7,13 +7,33 @@
 #![forbid(unsafe_code)]
 
 use domain::format_money;
-use maud::{html, Markup, DOCTYPE};
+use maud::{html, Markup, PreEscaped, DOCTYPE};
 
 pub const APP_NAME: &str = "OneClick";
 /// Rendered only through the Amiri/Noto Naskh stack (DESIGN-002 §6).
 pub const BISMILLAH: &str = "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ";
 
 pub const CSS: &str = include_str!("../assets/store.css");
+
+/// Remembers a dragged sidebar width. Progressive enhancement only.
+const SIDEBAR_JS: &str = r#"
+(function () {
+  try {
+    var shell = document.querySelector('.shell');
+    var bar = document.querySelector('.sidebar');
+    if (!shell || !bar) return;
+    var saved = localStorage.getItem('oneclick.side');
+    if (saved && !shell.classList.contains('collapsed')) {
+      bar.style.setProperty('inline-size', saved + 'px');
+    }
+    bar.addEventListener('pointerup', function () {
+      if (shell.classList.contains('collapsed')) return;
+      var px = Math.round(bar.getBoundingClientRect().width);
+      if (px > 90 && px < 440) localStorage.setItem('oneclick.side', px);
+    });
+  } catch (e) {}
+})();
+"#;
 
 // ---------------------------------------------------------------------------
 // Language
@@ -144,6 +164,7 @@ fn fr(key: &str) -> &'static str {
         "nav.quick_sell" => "Vente rapide",
         "nav.search" => "Chercher ou scanner…",
         "nav.group_sell" => "Caisse",
+        "nav.collapse" => "Réduire le menu",
         "nav.group_manage" => "Gestion",
         "nav.carnet" => "Carnet",
         "nav.settings" => "Réglages",
@@ -231,6 +252,7 @@ fn ar(key: &str) -> Option<&'static str> {
         "nav.quick_sell" => "بيع سريع",
         "nav.search" => "ابحث أو امسح…",
         "nav.group_sell" => "الصندوق",
+        "nav.collapse" => "تصغير القائمة",
         "nav.group_manage" => "الإدارة",
         "nav.carnet" => "الديون",
         "nav.settings" => "الإعدادات",
@@ -315,6 +337,7 @@ fn en(key: &str) -> Option<&'static str> {
         "nav.quick_sell" => "Quick sale",
         "nav.search" => "Search or scan…",
         "nav.group_sell" => "Till",
+        "nav.collapse" => "Collapse menu",
         "nav.group_manage" => "Manage",
         "nav.carnet" => "Debts",
         "nav.settings" => "Settings",
@@ -411,6 +434,86 @@ pub struct Chrome {
     pub active: Option<Nav>,
     pub cart_count: usize,
     pub title: String,
+    /// Sidebar reduced to its icon rail.
+    pub collapsed: bool,
+}
+
+
+impl Nav {
+    /// Line icons, drawn inline so the collapsed rail still says what each
+    /// destination is without a single tooltip.
+    pub fn icon(self) -> Markup {
+        let paths: &[&str] = match self {
+            Nav::Sell => &[
+                "M4 8h16l-1.6 9.2a2 2 0 0 1-2 1.8H7.6a2 2 0 0 1-2-1.8L4 8Z",
+                "M9 8V6a3 3 0 0 1 6 0v2",
+            ],
+            Nav::Sales => &[
+                "M8 6h13", "M8 12h13", "M8 18h13",
+                "M3.5 6h.01", "M3.5 12h.01", "M3.5 18h.01",
+            ],
+            Nav::Carnet => &[
+                "M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 16.5v-9Z",
+                "M3 9h18", "M16.5 14.5h.01",
+            ],
+            Nav::Products => &[
+                "M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6L12 3.2Z",
+                "M4 7.6 12 12l8-4.4", "M12 12v8.8",
+            ],
+            Nav::Settings => &[
+                "M4 7h9", "M19 7h1", "M4 17h5", "M15 17h5",
+                "M15.5 7a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z",
+                "M11.5 17a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z",
+            ],
+        };
+
+        html! {
+            svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
+                aria-hidden="true" {
+                @for d in paths {
+                    path d=(d);
+                }
+            }
+        }
+    }
+}
+
+/// Extra glyphs for the sidebar destinations that are not in `Nav`.
+pub fn icon_session() -> Markup {
+    html! {
+        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" {
+            path d="M6.5 3h11A1.5 1.5 0 0 1 19 4.5v15A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3Z";
+            path d="M8.5 7h7";
+            path d="M9 11h.01"; path d="M12 11h.01"; path d="M15 11h.01";
+            path d="M9 14.5h.01"; path d="M12 14.5h.01"; path d="M15 14.5h.01";
+            path d="M9 18h6";
+        }
+    }
+}
+
+pub fn icon_journal() -> Markup {
+    html! {
+        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" {
+            circle cx="12" cy="12" r="8.5";
+            path d="M12 7.5V12l3 1.8";
+        }
+    }
+}
+
+pub fn icon_panel() -> Markup {
+    html! {
+        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" {
+            rect x="3.5" y="4.5" width="17" height="15" rx="2.5";
+            path d="M9.5 4.5v15";
+        }
+    }
 }
 
 pub fn page(chrome: &Chrome, body: Markup) -> Markup {
@@ -422,19 +525,24 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     };
     let active = chrome.active;
 
-    let item = |nav: Nav| {
+    let item = |nav: Nav, extra: Option<Markup>| {
         let is_active = active == Some(nav);
         html! {
             a href=(nav.href())
               class=(if is_active { "nav-item active" } else { "nav-item" })
-              aria-current=(if is_active { "page" } else { "false" }) {
+              aria-current=(if is_active { "page" } else { "false" })
+              title=(t(lang, nav.key())) {
+                (nav.icon())
                 span.nav-label { (t(lang, nav.key())) }
                 @if nav == Nav::Sell && chrome.cart_count > 0 {
                     span.count { (chrome.cart_count) }
                 }
+                @if let Some(extra) = extra { (extra) }
             }
         }
     };
+
+    let side_class = if chrome.collapsed { "shell collapsed" } else { "shell" };
 
     html! {
         (DOCTYPE)
@@ -447,22 +555,29 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                 link rel="stylesheet" href="/assets/store.css";
             }
             body {
-                div.shell {
+                div class=(side_class) {
                     aside.sidebar {
-                        a.brand href="/" {
-                            div.brand-tile { "1C" }
-                            div {
-                                div.brand-name { (shop) }
-                                @if let Some(name) = &chrome.user {
-                                    div.brand-sub { (name.as_str()) }
+                        div.side-top {
+                            a.brand href="/" title=(shop) {
+                                div.brand-tile { "1C" }
+                                div.brand-text {
+                                    div.brand-name { (shop) }
+                                    @if let Some(name) = &chrome.user {
+                                        div.brand-sub { (name.as_str()) }
+                                    }
                                 }
+                            }
+                            /* collapse / expand — the rail keeps every icon */
+                            a.side-toggle href="/sidebar" title=(t(lang, "nav.collapse"))
+                              aria-label=(t(lang, "nav.collapse")) {
+                                (icon_panel())
                             }
                         }
 
                         /* Quick sell: always the first thing in reach */
-                        a.btn.btn-primary.btn-block.quick-sell href="/" {
+                        a.btn.btn-primary.quick-sell href="/" title=(t(lang, "nav.quick_sell")) {
                             span.plus aria-hidden="true" { "+" }
-                            (t(lang, "nav.quick_sell"))
+                            span.qs-label { (t(lang, "nav.quick_sell")) }
                         }
 
                         form.side-search method="get" action="/" role="search" {
@@ -475,16 +590,22 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                         nav.side-nav aria-label=(t(lang, "nav.group_sell")) {
                             div.nav-group {
                                 div.nav-title { (t(lang, "nav.group_sell")) }
-                                (item(Nav::Sell))
-                                (item(Nav::Sales))
-                                (item(Nav::Carnet))
-                                (item(Nav::Products))
+                                (item(Nav::Sell, None))
+                                (item(Nav::Sales, None))
+                                (item(Nav::Carnet, None))
+                                (item(Nav::Products, None))
                             }
                             div.nav-group {
                                 div.nav-title { (t(lang, "nav.group_manage")) }
-                                a.nav-item href="/session" { span.nav-label { (t(lang, "nav.session")) } }
-                                a.nav-item href="/journal" { span.nav-label { (t(lang, "nav.journal")) } }
-                                (item(Nav::Settings))
+                                a.nav-item href="/session" title=(t(lang, "nav.session")) {
+                                    (icon_session())
+                                    span.nav-label { (t(lang, "nav.session")) }
+                                }
+                                a.nav-item href="/journal" title=(t(lang, "nav.journal")) {
+                                    (icon_journal())
+                                    span.nav-label { (t(lang, "nav.journal")) }
+                                }
+                                (item(Nav::Settings, None))
                             }
                         }
 
@@ -514,6 +635,7 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                                             button type="submit" { (t(lang, "nav.logout")) }
                                         }
                                     }
+                                    div.menu-version { (APP_NAME) " " (version()) }
                                 }
                             }
                         }
@@ -527,6 +649,10 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                         main.wrap { (body) }
                     }
                 }
+
+                /* Progressive enhancement only: remembers the dragged width.
+                   Without JavaScript the sidebar is still resizable per page. */
+                script { (PreEscaped(SIDEBAR_JS)) }
             }
         }
     }

@@ -61,6 +61,7 @@ pub fn routes(state: AppState) -> Router {
         .route("/logout", post(logout))
         .route("/setup", get(setup_page).post(setup_submit))
         .route("/theme", get(toggle_theme))
+        .route("/sidebar", get(toggle_sidebar))
         .route("/lang/{code}", get(set_lang))
         .route("/sales", get(sales_page))
         .route("/products", get(products_page))
@@ -116,6 +117,10 @@ fn append_cookie(mut resp: Response, cookie: &str) -> Response {
 
 fn lang_of(headers: &HeaderMap) -> Lang {
     Lang::from_code(&cookie(headers, "lang").unwrap_or_else(|| "fr".to_string()))
+}
+
+fn sidebar_collapsed(headers: &HeaderMap) -> bool {
+    cookie(headers, "side").as_deref() == Some("collapsed")
 }
 
 fn theme_of(headers: &HeaderMap) -> Theme {
@@ -183,6 +188,7 @@ fn chrome(
         active: Some(active),
         cart_count,
         title: title.to_string(),
+        collapsed: sidebar_collapsed(headers),
     }
 }
 
@@ -1647,6 +1653,12 @@ async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
 // ---------------------------------------------------------------------------
 // Preferences: theme + language (no settings screen needed)
 // ---------------------------------------------------------------------------
+
+async fn toggle_sidebar(State(_state): State<AppState>, headers: HeaderMap) -> Response {
+    let next = if sidebar_collapsed(&headers) { "open" } else { "collapsed" };
+    let resp = Redirect::to(&back(&headers)).into_response();
+    append_cookie(resp, &cookie_header("side", next, 365 * 86_400))
+}
 
 async fn toggle_theme(State(_state): State<AppState>, headers: HeaderMap) -> Response {
     let next = theme_of(&headers).toggled();

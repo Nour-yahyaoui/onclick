@@ -141,7 +141,8 @@ a:hover { text-decoration: underline; }
 
 .shell {
   display: grid;
-  grid-template-columns: var(--side-w);
+  /* auto = the sidebar's own width, so dragging its edge reflows the page */
+  grid-template-columns: auto minmax(0, 1fr);
   min-block-size: 100dvh;
 }
 
@@ -151,14 +152,27 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+  inline-size: var(--side-w);
+  min-inline-size: 76px;
+  max-inline-size: 420px;
   block-size: 100dvh;
   padding: 16px 14px;
+  /* drag the inner edge to resize (Chromium); width is remembered by script */
+  resize: horizontal;
+  overflow: hidden;
   background: var(--surface);
   border-inline-end: 1px solid var(--hair);
   z-index: 30;
 }
 
 .main-col { min-inline-size: 0; }
+
+.side-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
 
 .brand {
   display: flex;
@@ -168,6 +182,20 @@ a:hover { text-decoration: underline; }
   min-inline-size: 0;
   color: inherit;
 }
+.brand-text { min-inline-size: 0; }
+
+.side-toggle {
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 8px;
+  color: var(--muted);
+  flex: none;
+}
+.side-toggle:hover { background: var(--surface-3); color: var(--ink); text-decoration: none; }
+.side-toggle .nav-icon { inline-size: 17px; block-size: 17px; }
 .brand:hover { text-decoration: none; }
 
 .brand-tile {
@@ -261,7 +289,15 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 
+.nav-icon {
+  inline-size: 19px;
+  block-size: 19px;
+  flex: none;
+  opacity: .85;
+}
+
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -297,6 +333,75 @@ a:hover { text-decoration: underline; }
   color: var(--accent-ink);
   font-size: .7rem;
   font-weight: 800;
+}
+
+/* ---- collapsed: an icon rail, nothing lost ---- */
+
+.shell.collapsed { --side-w: 76px; }
+
+.shell.collapsed .sidebar {
+  inline-size: 76px;
+  padding-inline: 10px;
+  resize: none;
+  align-items: center;
+}
+.shell.collapsed .brand { padding: 0; }
+.shell.collapsed .brand-text,
+.shell.collapsed .nav-label,
+.shell.collapsed .nav-title,
+.shell.collapsed .qs-label,
+.shell.collapsed .side-search { display: none; }
+
+.shell.collapsed .side-top { flex-direction: column; gap: 8px; }
+.shell.collapsed .side-toggle { margin-inline-start: 0; }
+
+.shell.collapsed .quick-sell {
+  inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  padding: 0;
+  justify-content: center;
+  margin-inline: auto;
+}
+.shell.collapsed .quick-sell .plus { background: none; font-size: 1.35rem; }
+
+.shell.collapsed .side-nav { inline-size: 100%; align-items: center; }
+.shell.collapsed .nav-group { inline-size: 100%; }
+.shell.collapsed .nav-group + .nav-group {
+  margin-block-start: 8px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--hair);
+}
+.shell.collapsed .nav-item {
+  justify-content: center;
+  padding-inline: 0;
+  inline-size: 44px;
+  margin-inline: auto;
+}
+.shell.collapsed .nav-item .nav-icon { inline-size: 21px; block-size: 21px; opacity: 1; }
+.shell.collapsed .nav-item .count {
+  position: absolute;
+  inset-block-start: -3px;
+  inset-inline-end: -3px;
+  margin: 0;
+  min-inline-size: 18px;
+  block-size: 18px;
+  font-size: .62rem;
+}
+.shell.collapsed .side-foot {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.shell.collapsed .menu { margin-inline-start: 0; }
+
+/* the rail clips its own overflow (resize needs it), so the menu escapes it */
+.shell.collapsed .menu.up .menu-panel {
+  position: fixed;
+  inset-block-end: 22px;
+  inset-inline-start: calc(var(--side-w) + 6px);
+  inset-inline-end: auto;
+  inset-block-start: auto;
 }
 
 /* bottom: language, theme, menu */
