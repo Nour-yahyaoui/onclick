@@ -36,12 +36,40 @@ def statements(src: str):
         yield match.start(), src[max(0, match.start() - 40):match.start()], chunk
 
 
+def option_renders(src: str, path):
+    """maud 0.26 has no Render impl for Option<T>: `(maybe)` will not compile.
+
+    Heuristic: a binding initialised with `.map(`, `Option::`, or typed
+    `Option<...>` that is later rendered as a bare `(name)` in a maud block.
+    """
+    findings = []
+    # functions in this file that hand back an Option
+    option_fns = set(
+        re.findall(r'fn\s+([a-z_][a-z0-9_]*)\s*\([^)]*\)\s*->\s*(?:Result<)?Option<', src)
+    )
+    for match in re.finditer(r'let\s+(?:mut\s+)?([a-z_][a-z0-9_]*)\s*(?::\s*Option<[^>]*>)?\s*=\s*([^;]+);', src):
+        name, init = match.group(1), match.group(2)
+        calls_option_fn = any(re.search(r'\b' + fn + r'\s*\(', init) for fn in option_fns)
+        if not (
+            '.map(' in init
+            or 'Option<' in match.group(0)
+            or init.strip().startswith('Some(')
+            or calls_option_fn
+        ):
+            continue
+        if re.search(r'^\s*\(' + name + r'\)\s*$', src, re.M):
+            line = src.count('\n', 0, match.start()) + 1
+            findings.append(f"{path}:{line}: `{name}` looks like Option<_> but is rendered as ({name})")
+    return findings
+
+
 def main() -> int:
     problems = []
     for path in sorted(pathlib.Path('.').rglob('*.rs')):
         if 'target' in path.parts:
             continue
         src = path.read_text(encoding='utf-8')
+        problems.extend(option_renders(src, path))
         for offset, before, chunk in statements(src):
             if re.search(r'\bclass\s*=', chunk):
                 line = src.count('\n', 0, offset) + 1
@@ -51,7 +79,7 @@ def main() -> int:
     for problem in problems:
         print(problem)
     if problems:
-        print(f"\n{len(problems)} duplicate class attribute(s) — maud will refuse to build.")
+        print(f"\n{len(problems)} maud problem(s) — the crate will not compile.")
         return 1
     print("maud class check: clean")
     return 0

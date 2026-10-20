@@ -130,7 +130,6 @@ impl Nav {
         }
     }
 
-    const ALL: [Nav; 5] = [Nav::Sell, Nav::Sales, Nav::Products, Nav::Carnet, Nav::Settings];
 }
 
 // ---------------------------------------------------------------------------

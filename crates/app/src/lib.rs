@@ -254,7 +254,6 @@ async fn index(
 fn pos_body(
     conn: &Db,
     headers: &HeaderMap,
-    user: &User,
     query: Option<&str>,
     done: Option<&str>,
 ) -> Result<Markup> {
@@ -400,7 +399,7 @@ fn render_index(
     let lang = lang_of(headers);
     let sid = cookie(headers, "sid").unwrap_or_default();
     let cart = storage::draft_lines(conn, &sid)?.len();
-    let body = pos_body(conn, headers, user, query, done)?;
+    let body = pos_body(conn, headers, query, done)?;
     Ok(ui::page(
         &chrome(conn, headers, user, Nav::Sell, cart, ui::t(lang, "nav.sell")),
         body,
@@ -1033,7 +1032,7 @@ async fn session_page(
             },
         };
         let body = html! {
-            @if let Some(toast) = &notice { (toast) }
+            @if let Some(toast) = notice { (toast) }
             (body)
         };
         Ok(ui::page(&chrome(&conn, &headers, &user, Nav::Sell, 0, "Caisse"), body))
@@ -1557,6 +1556,12 @@ async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
     page_response(ui::auth_page(lang, theme_of(&headers), ui::t(lang, "login.enter"), body))
 }
 
+#[derive(Deserialize)]
+struct LoginForm {
+    name: Option<String>,
+    password: String,
+}
+
 async fn login_submit(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1674,10 +1679,12 @@ async fn settings_page(
 
     // The till stays visible behind the dialog: settings never feels like another app.
     let result = (|| -> Result<Markup> {
-        let behind = pos_body(&conn, &headers, &user, None, None)?;
+        let behind = pos_body(&conn, &headers, None, None)?;
         let body = html! {
             (behind)
-            (notice)
+            @if let Some(toast) = notice {
+                (toast)
+            }
 
             div.overlay role="dialog" aria-modal="true" aria-labelledby="settings-title" {
                 div.modal {
