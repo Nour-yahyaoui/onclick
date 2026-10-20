@@ -146,3 +146,15 @@ The previous plan had the control plane + dashboard on **Next.js/Vercel** (`ADR-
 | **Net** | **≈ −2 d** → full v1 ≈ **109 d**, pilot ≈ **66 d** |
 
 The rule costs nothing. It removes a toolchain and a class of bugs.
+
+## Icônes (v1.0.4)
+
+Les sept tracés de barre latérale écrits à la main ont été remplacés par un jeu
+réel : **Lucide 1.60.0** (licence ISC), 26 icônes, converties en Rust par
+`scripts/make_icons.py` → `crates/ui/src/icons.rs`. Elles héritent de
+`currentColor`, donc le mode sombre ne demande aucun travail. Régénérer :
+
+```bash
+python3 scripts/make_icons.py --fetch   # retélécharge les .svg voulus
+python3 scripts/make_icons.py           # réécrit icons.rs
+```

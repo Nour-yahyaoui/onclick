@@ -9,6 +9,8 @@
 use domain::format_money;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 
+pub mod icons;
+
 pub const APP_NAME: &str = "OneClick";
 /// Rendered only through the Amiri/Noto Naskh stack (DESIGN-002 §6).
 pub const BISMILLAH: &str = "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ";
@@ -194,6 +196,21 @@ fn fr(key: &str) -> &'static str {
     match key {
         "nav.sell" => "Vendre",
         "nav.products" => "Produits",
+        "photo.title" => "Photo du produit",
+        "photo.hint" => "Une photo prise avec votre téléphone, ou une image déjà prête. Elle reste sur cet ordinateur.",
+        "photo.upload" => "Choisir une photo",
+        "photo.choose_default" => "Ou prendre une image déjà prête",
+        "photo.remove" => "Enlever la photo",
+        "photo.bad" => "Ce fichier n'est pas une image (JPEG, PNG ou WebP).",
+        "photo.type.phone" => "Téléphone",
+        "photo.type.charger" => "Chargeur",
+        "photo.type.cable" => "Câble",
+        "photo.type.case" => "Coque",
+        "photo.type.earphones" => "Écouteurs",
+        "photo.type.headset" => "Casque",
+        "photo.type.powerbank" => "Batterie externe",
+        "photo.type.protector" => "Verre trempé",
+        "toast.photo" => "Photo enregistrée",
         "nav.sales" => "Ventes",
         "nav.expenses" => "Charges",
         "scan.placeholder" => "Scanner ou taper un code",
@@ -364,6 +381,21 @@ fn ar(key: &str) -> Option<&'static str> {
     Some(match key {
         "nav.sell" => "بيع",
         "nav.products" => "المنتجات",
+        "photo.title" => "صورة المنتج",
+        "photo.hint" => "صورة بتليفونك، ولا صورة جاهزة. تبقى في هذا الحاسوب.",
+        "photo.upload" => "اختار صورة",
+        "photo.choose_default" => "ولا اختار صورة جاهزة",
+        "photo.remove" => "نحّي الصورة",
+        "photo.bad" => "الملف هذا موش صورة (JPEG ولا PNG ولا WebP).",
+        "photo.type.phone" => "تليفون",
+        "photo.type.charger" => "شارجور",
+        "photo.type.cable" => "كابل",
+        "photo.type.case" => "كوفير",
+        "photo.type.earphones" => "إيربودز",
+        "photo.type.headset" => "كاسك",
+        "photo.type.powerbank" => "باتري خارجية",
+        "photo.type.protector" => "فير تونبي",
+        "toast.photo" => "تسجّلت الصورة",
         "nav.sales" => "المبيعات",
         "nav.expenses" => "المصاريف",
         "nav.session" => "الصندوق / Z",
@@ -534,6 +566,21 @@ fn en(key: &str) -> Option<&'static str> {
     Some(match key {
         "nav.sell" => "Sell",
         "nav.products" => "Products",
+        "photo.title" => "Product picture",
+        "photo.hint" => "A photo from your phone, or a ready-made one. It stays on this computer.",
+        "photo.upload" => "Choose a photo",
+        "photo.choose_default" => "Or pick a ready-made one",
+        "photo.remove" => "Remove the photo",
+        "photo.bad" => "That file is not an image (JPEG, PNG or WebP).",
+        "photo.type.phone" => "Phone",
+        "photo.type.charger" => "Charger",
+        "photo.type.cable" => "Cable",
+        "photo.type.case" => "Case",
+        "photo.type.earphones" => "Earphones",
+        "photo.type.headset" => "Headset",
+        "photo.type.powerbank" => "Power bank",
+        "photo.type.protector" => "Screen protector",
+        "toast.photo" => "Picture saved",
         "nav.sales" => "Sales",
         "nav.expenses" => "Costs",
         "nav.session" => "Till / Z",
@@ -729,95 +776,33 @@ impl Nav {
     /// Line icons, drawn inline so the collapsed rail still says what each
     /// destination is without a single tooltip.
     pub fn icon(self) -> Markup {
-        let paths: &[&str] = match self {
-            Nav::Sell => &[
-                "M4 8h16l-1.6 9.2a2 2 0 0 1-2 1.8H7.6a2 2 0 0 1-2-1.8L4 8Z",
-                "M9 8V6a3 3 0 0 1 6 0v2",
-            ],
-            Nav::Sales => &[
-                "M8 6h13", "M8 12h13", "M8 18h13",
-                "M3.5 6h.01", "M3.5 12h.01", "M3.5 18h.01",
-            ],
-            Nav::Carnet => &[
-                "M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 16.5v-9Z",
-                "M3 9h18", "M16.5 14.5h.01",
-            ],
-            Nav::Products => &[
-                "M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6L12 3.2Z",
-                "M4 7.6 12 12l8-4.4", "M12 12v8.8",
-            ],
-            Nav::Expenses => &[
-                "M3.5 7.5h17v9h-17z",
-                "M12 14.4a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z",
-                "M6.6 10v4M17.4 10v4",
-            ],
-            Nav::Settings => &[
-                "M4 7h9", "M19 7h1", "M4 17h5", "M15 17h5",
-                "M15.5 7a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z",
-                "M11.5 17a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z",
-            ],
+        let name = match self {
+            Nav::Sell => "sell",
+            Nav::Sales => "sales",
+            Nav::Products => "products",
+            Nav::Carnet => "carnet",
+            Nav::Expenses => "expenses",
+            Nav::Settings => "settings",
         };
-
-        html! {
-            svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
-                aria-hidden="true" {
-                @for d in paths {
-                    path d=(d);
-                }
-            }
-        }
+        nav_icon(name)
     }
 }
 
 /// Extra glyphs for the sidebar destinations that are not in `Nav`.
-pub fn icon_session() -> Markup {
-    html! {
-        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
-            aria-hidden="true" {
-            path d="M6.5 3h11A1.5 1.5 0 0 1 19 4.5v15A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3Z";
-            path d="M8.5 7h7";
-            path d="M9 11h.01"; path d="M12 11h.01"; path d="M15 11h.01";
-            path d="M9 14.5h.01"; path d="M12 14.5h.01"; path d="M15 14.5h.01";
-            path d="M9 18h6";
-        }
-    }
-}
 
-pub fn icon_journal() -> Markup {
-    html! {
-        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
-            aria-hidden="true" {
-            circle cx="12" cy="12" r="8.5";
-            path d="M12 7.5V12l3 1.8";
-        }
-    }
-}
 
 /// Fold / unfold arrow for the sidebar toggle.
-pub fn icon_chevron(point_start: bool) -> Markup {
-    let d = if point_start { "M14.5 6.5 9 12l5.5 5.5" } else { "M9.5 6.5 15 12l-5.5 5.5" };
+/// One icon from the generated set (Lucide). Inherits the text colour, so the
+/// same call works on a green button and on a muted sidebar row.
+pub fn icon(name: &str) -> Markup {
     html! {
-        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            "stroke-width"=(2) "stroke-linecap"="round" "stroke-linejoin"="round"
-            aria-hidden="true" {
-            path d=(d);
-        }
+        svg.icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(1.8) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" { (PreEscaped(icons::paths(name))) }
     }
 }
 
-pub fn icon_panel() -> Markup {
-    html! {
-        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            "stroke-width"=(1.7) "stroke-linecap"="round" "stroke-linejoin"="round"
-            aria-hidden="true" {
-            rect x="3.5" y="4.5" width="17" height="15" rx="2.5";
-            path d="M9.5 4.5v15";
-        }
-    }
-}
+
 
 pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     let lang = chrome.lang;
@@ -875,17 +860,18 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                             a.side-toggle href="/sidebar" title=(t(lang, toggle_key))
                               aria-label=(t(lang, toggle_key))
                               aria-expanded=(if chrome.collapsed { "false" } else { "true" }) {
-                                (icon_chevron((lang == Lang::Ar) != chrome.collapsed))
+                                (nav_icon(if chrome.collapsed { "expand" } else { "collapse" }))
                             }
                         }
 
                         /* Quick sell: always the first thing in reach */
                         a.btn.btn-primary.quick-sell href="/" title=(t(lang, "nav.quick_sell")) {
-                            span.plus aria-hidden="true" { "+" }
+                            span.plus aria-hidden="true" { (icon("plus")) }
                             span.qs-label { (t(lang, "nav.quick_sell")) }
                         }
 
                         form.side-search method="get" action="/" role="search" {
+                            (icon("search"))
                             input type="search" name="q" dir="ltr"
                                   placeholder=(t(lang, "nav.search"))
                                   aria-label=(t(lang, "nav.search"))
@@ -903,11 +889,11 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                             div.nav-group {
                                 div.nav-title { (t(lang, "nav.group_manage")) }
                                 a.nav-item href="/session" title=(t(lang, "nav.session")) {
-                                    (icon_session())
+                                    (nav_icon("session"))
                                     span.nav-label { (t(lang, "nav.session")) }
                                 }
                                 a.nav-item href="/journal" title=(t(lang, "nav.journal")) {
-                                    (icon_journal())
+                                    (nav_icon("journal"))
                                     span.nav-label { (t(lang, "nav.journal")) }
                                 }
                                 (item(Nav::Expenses, None))
@@ -925,14 +911,14 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
 
                             a.icon-btn href="/theme" title=(t(lang, "theme.toggle")) {
                                 @if chrome.theme == Theme::Dark {
-                                    span.icon-sun {}
+                                    (icon("sun"))
                                 } @else {
-                                    span.icon-moon {}
+                                    (icon("moon"))
                                 }
                             }
 
                             details.menu.up {
-                                summary.icon-btn aria-label=(t(lang, "nav.menu")) { "⋯" }
+                                summary.icon-btn aria-label=(t(lang, "nav.menu")) { (icon("menu")) }
                                 div.menu-panel {
                                     @if let Some(name) = &chrome.user {
                                         div.who { (name.as_str()) }
@@ -1067,6 +1053,8 @@ pub struct ProductView<'a> {
     pub stock: i64,
     /// false = the shop never counted this item: say nothing about stock.
     pub counted: bool,
+    /// Resolved URL of the product picture, if it has one.
+    pub photo: Option<String>,
 }
 
 /// The whole card is the button: one tap adds the product (DESIGN-002 R2).
@@ -1084,7 +1072,11 @@ pub fn product_card(product: &ProductView<'_>) -> Markup {
         form method="post" action="/cart/add" {
             input type="hidden" name="product_id" value=(product.id);
             button.product type="submit" {
-                div.thumb { (initial) }
+                @if let Some(src) = &product.photo {
+                    img.thumb-img src=(src) alt="" loading="lazy";
+                } @else {
+                    div.thumb { (initial) }
+                }
                 div.name { (product.name) }
                 @if no_price {
                     div.price.price-open { "prix à définir" }

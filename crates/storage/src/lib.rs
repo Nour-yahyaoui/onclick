@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 pub const SCHEMA_SQL: &str = include_str!("../../../migrations/0001_init.sql");
 pub const SCHEMA_SQL_V2: &str = include_str!("../../../migrations/0002_sessions.sql");
 pub const SCHEMA_SQL_V3: &str = include_str!("../../../migrations/0003_expenses_and_scan.sql");
+pub const SCHEMA_SQL_V4: &str = include_str!("../../../migrations/0004_photos.sql");
 
 /// Re-exported so the web layer can hold the connection without depending
 /// on rusqlite directly.
@@ -68,6 +69,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     if version < 3 {
         conn.execute_batch(SCHEMA_SQL_V3)
             .context("migration 0003_expenses_and_scan.sql failed")?;
+        version = 3;
+    }
+    if version < 4 {
+        conn.execute_batch(SCHEMA_SQL_V4)
+            .context("migration 0004_photos.sql failed")?;
     }
     Ok(())
 }
@@ -356,6 +362,8 @@ pub struct Product {
     /// false = the shop never counted this item (created by an unknown scan).
     /// The till must then say nothing about stock instead of shouting "0".
     pub counted: bool,
+    /// "d:<key>" = built-in drawing, "f:<file>" = photo uploaded by the shop.
+    pub photo: Option<String>,
 }
 
 /// A product may have no name yet (a scanned code, sheet left for later).
@@ -374,6 +382,7 @@ pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Produ
             cost: r.get(4)?,
             stock: r.get(5)?,
             counted: r.get::<_, i64>(6)? != 0,
+            photo: r.get(7)?,
         })
     };
 
@@ -382,7 +391,7 @@ pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Produ
             let like = format!("%{}%", q.to_lowercase());
             let mut stmt = conn.prepare(&format!(
                 "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
-                        p.tracks_stock
+                        p.tracks_stock, p.photo
                  FROM products p WHERE p.is_active = 1 AND p.archived_at IS NULL
                    AND (LOWER(COALESCE(p.name, '')) LIKE ?1 OR p.barcode = ?2 OR p.barcode LIKE ?1)
                  ORDER BY {NAME_EXPR} LIMIT 60"
@@ -395,7 +404,7 @@ pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Produ
         None => {
             let mut stmt = conn.prepare(&format!(
                 "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
-                        p.tracks_stock
+                        p.tracks_stock, p.photo
                  FROM products p WHERE p.is_active = 1 AND p.archived_at IS NULL
                  ORDER BY {NAME_EXPR} LIMIT 60"
             ))?;
@@ -413,7 +422,7 @@ pub fn find_by_barcode(conn: &Connection, barcode: &str) -> Result<Option<Produc
         .query_row(
             &format!(
                 "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
-                        p.tracks_stock
+                        p.tracks_stock, p.photo
                  FROM products p
                  WHERE p.is_active = 1 AND p.archived_at IS NULL AND p.barcode = ?1"
             ),
@@ -427,6 +436,7 @@ pub fn find_by_barcode(conn: &Connection, barcode: &str) -> Result<Option<Produc
                     cost: r.get(4)?,
                     stock: r.get(5)?,
                     counted: r.get::<_, i64>(6)? != 0,
+                    photo: r.get(7)?,
                 })
             },
         )
@@ -825,7 +835,7 @@ pub fn get_product(conn: &Connection, id: &str) -> Result<Product> {
     let product = conn.query_row(
         &format!(
             "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
-                    p.tracks_stock
+                    p.tracks_stock, p.photo
                FROM products p WHERE p.id = ?1"
         ),
         params![id],
@@ -838,6 +848,7 @@ pub fn get_product(conn: &Connection, id: &str) -> Result<Product> {
                 cost: r.get(4)?,
                 stock: r.get(5)?,
                 counted: r.get::<_, i64>(6)? != 0,
+                photo: r.get(7)?,
             })
         },
     )?;
@@ -2051,6 +2062,97 @@ fn list_backups(dir: &Path) -> Vec<BackupRow> {
     }
     out.sort_by(|a, b| b.at.cmp(&a.at));
     out
+}
+
+// ---------------------------------------------------------------------------
+// Product photos — the file stays on the shop's machine
+// ---------------------------------------------------------------------------
+//
+// Two kinds of value live in `products.photo`:
+//   "d:charger"     one of the drawings shipped inside store.exe
+//   "f:p_ab12.jpg"  a file the shop uploaded, copied into <data>/photos
+// A local URL scheme like this keeps the database free of paths: moving the
+// data folder does not break a single photo.
+
+pub fn photo_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join("photos")
+}
+
+/// Extension for an image we accept, or None. We trust the *content*, not the
+/// file name: what a customer's phone sends as `IMG_0042` is still a JPEG.
+pub fn image_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() > 4 && bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("jpg")
+    } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("png")
+    } else if bytes.len() > 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("webp")
+    } else {
+        None
+    }
+}
+
+/// Write a photo and remember it on the product. Returns the stored value.
+pub fn save_product_photo(
+    conn: &Connection,
+    actor: &User,
+    data_dir: &Path,
+    product_id: &str,
+    bytes: &[u8],
+) -> Result<String> {
+    let ext = image_extension(bytes)
+        .ok_or_else(|| anyhow!("photo_format"))?;
+    let dir = photo_dir(data_dir);
+    std::fs::create_dir_all(&dir).with_context(|| format!("créer {}", dir.display()))?;
+
+    // One file per product per format: the old one is removed, never accumulated.
+    for old in ["jpg", "png", "webp"] {
+        let _ = std::fs::remove_file(dir.join(format!("p_{product_id}.{old}")));
+    }
+    let file = format!("p_{product_id}.{ext}");
+    std::fs::write(dir.join(&file), bytes).with_context(|| format!("écrire {file}"))?;
+
+    set_product_photo(conn, actor, product_id, Some(&format!("f:{file}")))?;
+    Ok(format!("f:{file}"))
+}
+
+/// Set (or clear) the photo of a product. `value` is already in the
+/// "d:<key>" / "f:<file>" form; None removes it.
+pub fn set_product_photo(
+    conn: &Connection,
+    actor: &User,
+    product_id: &str,
+    value: Option<&str>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE products SET photo = ?2, photo_at = ?3, updated_at = ?3, updated_by = ?4,
+                            version = version + 1
+          WHERE id = ?1",
+        params![product_id, value, now_iso(), actor.id],
+    )?;
+    let summary = match value {
+        Some(_) => "Photo du produit enregistrée",
+        None => "Photo du produit retirée",
+    };
+    audit(&tx, actor, "update", "product", product_id, summary, None, None)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Where an uploaded photo lives, refusing anything that tries to escape the
+/// photos folder. `None` = not a photo we know about.
+pub fn photo_file(data_dir: &Path, name: &str) -> Option<PathBuf> {
+    let ok = !name.is_empty()
+        && name.len() < 80
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-');
+    if !ok || name.contains("..") {
+        return None;
+    }
+    let path = photo_dir(data_dir).join(name);
+    path.is_file().then_some(path)
 }
 
 pub fn default_data_dir() -> PathBuf {

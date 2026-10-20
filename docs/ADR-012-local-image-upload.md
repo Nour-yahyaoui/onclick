@@ -132,3 +132,17 @@ This is worth stating in the app: *« Les photos ne quittent jamais cet ordinate
 2. **Quota default** — 2 GB, or unlimited with only a warning?
 3. **Crop/zoom UI** in v1, or automatic centre-crop only (recommended)?
 4. Do you want photos on the **printed receipt** (thermal) at all? (Requires raster path — same as Arabic receipts.)
+
+## Implémentation (v1.0.4)
+
+- `products.photo` contient une référence courte, jamais un chemin :
+  `d:<clé>` (dessin embarqué) ou `f:<fichier>` (photo du magasin).
+- Les fichiers vont dans `<data>/photos/p_<id>.<ext>` : déplacer le dossier de
+  données ne casse aucune photo, et la base reste légère.
+- Le format est reconnu par les **premiers octets** (JPEG/PNG/WebP), pas par le
+  nom du fichier : une photo venue d'un téléphone s'appelle `IMG_0042`.
+- Rien n'est envoyé sur le réseau. La route `/photos/{nom}` refuse tout nom qui
+  sort du dossier (pas de `..`, pas de séparateur).
+- Les huit dessins d'accessoires (téléphone, chargeur, câble, coque, écouteurs,
+  casque, batterie externe, verre trempé) pèsent 41 Ko au total et sont gravés
+  dans `store.exe` : le magasin a une image correcte dès le premier jour.

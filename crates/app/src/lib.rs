@@ -7,7 +7,7 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -22,6 +22,30 @@ use std::{
 };
 use storage::{Db, Payment, User};
 use ui::{Chrome, Lang, Nav, Theme};
+
+/// Built-in product pictures, shipped inside store.exe (about 41 KB in total).
+/// A shop that has never taken a photo still gets something better than an
+/// empty box — and can replace it with its own picture at any time.
+static DEFAULT_PHOTOS: &[(&str, &[u8])] = &[
+    ("phone", include_bytes!("../../ui/assets/defaults/phone.jpg")),
+    ("charger", include_bytes!("../../ui/assets/defaults/charger.jpg")),
+    ("cable", include_bytes!("../../ui/assets/defaults/cable.jpg")),
+    ("case", include_bytes!("../../ui/assets/defaults/case.jpg")),
+    ("earphones", include_bytes!("../../ui/assets/defaults/earphones.jpg")),
+    ("headset", include_bytes!("../../ui/assets/defaults/headset.jpg")),
+    ("powerbank", include_bytes!("../../ui/assets/defaults/powerbank.jpg")),
+    ("protector", include_bytes!("../../ui/assets/defaults/protector.jpg")),
+];
+
+/// "d:charger" -> /photos/default/charger, "f:p_1.jpg" -> /photos/p_1.jpg
+fn photo_url(photo: &str) -> Option<String> {
+    let (kind, rest) = photo.split_once(':')?;
+    match kind {
+        "d" => Some(format!("/photos/default/{rest}")),
+        "f" => Some(format!("/photos/{rest}")),
+        _ => None,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -82,6 +106,9 @@ pub fn routes(state: AppState) -> Router {
         .route("/session/close", post(session_close))
         .route("/receipt/{id}", get(receipt_page))
         .route("/products/quick", get(product_quick_page).post(product_quick_create))
+        .route("/products/{id}/photo", post(product_photo))
+        .route("/photos/{name}", get(photo_file))
+        .route("/photos/default/{key}", get(photo_default))
         .route("/expenses", get(expenses_page).post(expense_create))
         .route("/expenses/{id}", post(expense_update))
         .route("/expenses/{id}/stop", post(expense_stop))
@@ -98,6 +125,9 @@ pub fn routes(state: AppState) -> Router {
         .route("/settings/backup", post(settings_backup))
         .route("/assets/store.css", get(stylesheet))
         .route("/health", get(health))
+        // A photo taken with a phone is easily 3-4 MB; the default 2 MB would
+        // reject it with a confusing error. 12 MB is generous but bounded.
+        .layer(DefaultBodyLimit::max(12 * 1024 * 1024))
         .with_state(state)
 }
 
@@ -245,6 +275,8 @@ fn toast_text(lang: Lang, code: &str) -> Option<&'static str> {
         "closed" => ui::t(lang, "toast.closed"),
         "added" => ui::t(lang, "toast.added"),
         "backup" => ui::t(lang, "toast.backup"),
+        "photo" => ui::t(lang, "toast.photo"),
+        "photo_bad" => ui::t(lang, "photo.bad"),
         "expense" => ui::t(lang, "toast.expense"),
         "expense_updated" => ui::t(lang, "toast.expense_updated"),
         "expense_stopped" => ui::t(lang, "toast.expense_stopped"),
@@ -338,6 +370,7 @@ fn pos_body(
                                 price: p.price,
                                 stock: p.stock,
                                 counted: p.counted,
+                                photo: p.photo.as_deref().and_then(photo_url),
                             }))
                         }
                     }
@@ -632,6 +665,9 @@ async fn products_page(
                         @for p in &products {
                             tr {
                                 td {
+                                    @if let Some(src) = p.photo.as_deref().and_then(photo_url) {
+                                        img.row-photo src=(src) alt="" loading="lazy";
+                                    }
                                     (p.name)
                                     @if p.price <= 0 {
                                         span.pill.credit { (ui::t(lang, "products.no_price")) }
@@ -1177,6 +1213,133 @@ async fn product_quick_create(
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Product photos: one file, on this machine, plus eight ready-made drawings
+// ---------------------------------------------------------------------------
+
+async fn photo_default(Path(path): Path<KeyPath>) -> Response {
+    match DEFAULT_PHOTOS.iter().find(|(key, _)| *key == path.key) {
+        Some((_, bytes)) => (
+            [
+                (header::CONTENT_TYPE, "image/jpeg"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            bytes.to_vec(),
+        )
+            .into_response(),
+        // A missing key is not an error worth a page: no picture is.
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct KeyPath {
+    key: String,
+}
+
+async fn photo_file(State(state): State<AppState>, Path(path): Path<NamePath>) -> Response {
+    let Some(file) = storage::photo_file(&state.data_dir, &path.name) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(bytes) = std::fs::read(&file) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let kind = match file.extension().and_then(|e| e.to_str()) {
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        _ => "image/jpeg",
+    };
+    (
+        [
+            (header::CONTENT_TYPE, kind),
+            // Re-uploading the same name must show the new picture at once.
+            (header::CACHE_CONTROL, "private, max-age=60"),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
+#[derive(Deserialize)]
+struct NamePath {
+    name: String,
+}
+
+/// Accepts three intents in one POST: a new file, a built-in picture, or none.
+async fn product_photo(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    mut multipart: Multipart,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let mut chosen_default: Option<String> = None;
+    let mut uploaded: Option<Vec<u8>> = None;
+    let mut clear = false;
+    let mut failure_note: Option<&str> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or_default().to_string();
+        match name.as_str() {
+            "default" => {
+                if let Ok(value) = field.text().await {
+                    let value = value.trim().to_string();
+                    if !value.is_empty() {
+                        chosen_default = Some(value);
+                    }
+                }
+            }
+            "clear" => clear = true,
+            "file" => {
+                // A phone photo can be 4 MB; the limit is enforced by the router.
+                match field.bytes().await {
+                    Ok(bytes) if !bytes.is_empty() => {
+                        if storage::image_extension(&bytes).is_some() {
+                            uploaded = Some(bytes.to_vec());
+                        } else {
+                            failure_note = Some("photo_format");
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(note) = failure_note {
+        let _ = note;
+        return Redirect::to(&format!("/products/{}?done=photo_bad", path.id)).into_response();
+    }
+
+    let outcome = if let Some(bytes) = uploaded {
+        storage::save_product_photo(&conn, &user, &state.data_dir, &path.id, &bytes).map(|_| ())
+    } else if let Some(key) = chosen_default {
+        // Only the keys we actually ship are accepted.
+        let exists = DEFAULT_PHOTOS.iter().any(|(k, _)| *k == key);
+        if exists {
+            storage::set_product_photo(&conn, &user, &path.id, Some(&format!("d:{key}")))
+        } else {
+            Ok(())
+        }
+    } else if clear {
+        storage::set_product_photo(&conn, &user, &path.id, None)
+    } else {
+        Ok(())
+    };
+
+    match outcome {
+        Ok(()) => Redirect::to(&format!("/products/{}?done=photo", path.id)).into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Fixed charges: the rent, the water, the power, the maintenance
 // ---------------------------------------------------------------------------
@@ -1594,10 +1757,63 @@ async fn product_edit_page(
     let result = (|| -> Result<Markup> {
         let product = storage::get_product(&conn, &path.id)?;
         let stats = storage::product_stats(&conn, &path.id)?;
+        let default_keys: Vec<&str> = DEFAULT_PHOTOS.iter().map(|(key, _)| *key).collect();
 
         let body = html! {
             p { a href="/products" { "← " (ui::t(lang, "products.title")) } }
             h1 { (product.name) }
+
+            /* Photo: their own picture, or one of the eight ready-made ones. */
+            div.card.card-pad style="margin-block-end:14px" {
+                div.photo-row {
+                    div.photo-preview {
+                        @if let Some(src) = product.photo.as_deref().and_then(photo_url) {
+                            img src=(src) alt="" ;
+                        } @else {
+                            div.photo-blank { (ui::icon("image")) }
+                        }
+                    }
+                    div.photo-actions {
+                        h3 { (ui::t(lang, "photo.title")) }
+                        p.muted style="margin:0 0 8px" { (ui::t(lang, "photo.hint")) }
+
+                        form method="post" action=(format!("/products/{}/photo", product.id))
+                             enctype="multipart/form-data" {
+                            label.btn.btn-primary for="photo-file" {
+                                (ui::icon("camera"))
+                                (ui::t(lang, "photo.upload"))
+                            }
+                            input type="file" id="photo-file" name="file" accept="image/*"
+                                  onchange="this.form.submit()"
+                                  style="display:none";
+                        }
+
+                        details.photo-defaults {
+                            summary { (ui::t(lang, "photo.choose_default")) }
+                            form method="post" action=(format!("/products/{}/photo", product.id)) {
+                                div.photo-grid {
+                                    @for key in default_keys.iter().copied() {
+                                        button.photo-pick type="submit" name="default" value=(key)
+                                               title=(ui::t(lang, &format!("photo.type.{key}"))) {
+                                            img src=(format!("/photos/default/{key}")) alt="";
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        @if product.photo.is_some() {
+                            form method="post" action=(format!("/products/{}/photo", product.id)) {
+                                input type="hidden" name="clear" value="1";
+                                button.btn.btn-ghost type="submit" {
+                                    (ui::icon("trash"))
+                                    (ui::t(lang, "photo.remove"))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             /* What this product actually did — the shop learns its own prices. */
             div.card.card-pad style="margin-block-end:14px" {

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 description = "The till: axum handlers, server-side maud pages, auth."
 
@@ -9,7 +9,7 @@ domain = { path = "../domain" }
 storage = { path = "../storage" }
 ui = { path = "../ui" }
 anyhow = "1"
-axum = { version = "0.8", features = ["form"] }
+axum = { version = "0.8", features = ["form", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 maud = "0.26"
 serde = { version = "1", features = ["derive"] }

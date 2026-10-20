@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v1.0.3** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v1.0.4** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -76,6 +76,7 @@ jour** pour les couvrir. Décision complète : [`docs/ADR-016`](docs/ADR-016-inv
 | **Inventory that fills itself**: unnamed items show as « Code 123456 », never « rupture » | ✅ |
 | **Product sheet** shows what it really sold, to fix the price later | ✅ |
 | **Charges**: rent / water / power / maintenance, per month, quarter or year | ✅ |
+| **Product pictures**: upload your own, or pick one of 8 built-in drawings — stored locally | ✅ |
 | Bismillah masthead (Amiri/naskh stack) on every page | ✅ |
 | First run: 3 plain questions → a working till with 6 sample products | ✅ |
 | Owner password (Argon2id), session ids stored hashed | ✅ |
@@ -220,6 +221,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v1.0.4** | **Photos produits** : votre propre photo (JPEG/PNG/WebP, copiée dans `data/photos`, jamais envoyée nulle part) ou l'une des **8 images d'accessoires** embarquées dans l'exe ; vignettes dans la grille de vente et dans la liste. **Icônes de barre latérale refaites** avec la bibliothèque Lucide (26 icônes générées par script, plus aucun tracé à la main) |
 | **v1.0.3** | `winresource` déclaré comme dépendance de **build** (l'icône ne compilait pas sur Windows) |
 | **v1.0.2** | **Icône OneClick gravée dans `store.exe`** (Explorateur, barre des tâches, raccourcis) + fiche du fichier renseignée ; `store --open` démarre et ouvre le navigateur ; la fenêtre noire ne survit plus à l'app. Note honnête sur l'alerte SmartScreen dans `OPS-003` |
 | **v1.0.1** | **Sauvegarde réelle** (bouton « Sauvegarder maintenant », copie cohérente via `VACUUM INTO`, 14 dernières gardées) ; le réglage ne promet plus « sauvegarde automatique chaque soir » ni un chiffrement qui n'existe pas |
