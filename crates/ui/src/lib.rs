@@ -199,7 +199,6 @@ fn fr(key: &str) -> &'static str {
         "carnet.empty" => "Personne ne vous doit d'argent.",
         "carnet.paid" => "Encaissé",
         "login.title" => "Bonjour",
-        "login.hint" => "Entrez votre mot de passe pour ouvrir la caisse.",
         "theme.short" => "Jour",
         "login.user" => "Votre nom",
         "login.password" => "Mot de passe",
@@ -284,7 +283,6 @@ fn ar(key: &str) -> Option<&'static str> {
         "carnet.empty" => "لا أحد مدين لك.",
         "carnet.paid" => "تم التحصيل",
         "login.title" => "مرحباً",
-        "login.hint" => "أدخل كلمة السر لفتح الصندوق.",
         "theme.short" => "نهار",
         "login.user" => "اسمك",
         "login.password" => "كلمة السر",
@@ -369,7 +367,6 @@ fn en(key: &str) -> Option<&'static str> {
         "carnet.empty" => "Nobody owes you money.",
         "carnet.paid" => "Collected",
         "login.title" => "Welcome",
-        "login.hint" => "Enter your password to open the till.",
         "theme.short" => "Day",
         "login.user" => "Your name",
         "login.password" => "Password",
@@ -595,6 +592,11 @@ pub fn auth_bismillah() -> Markup {
 }
 
 /// Brand row for the sign-in / first-run card: tile + shop name.
+/// Small build stamp: which version is running (bumped on every commit).
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 pub fn auth_brand(shop: &str) -> Markup {
     let label = if shop.trim().is_empty() { APP_NAME } else { shop };
     html! {

@@ -1523,7 +1523,6 @@ async fn login_page(State(state): State<AppState>, headers: HeaderMap) -> Respon
         (ui::auth_bismillah())
 
         h1 { (ui::t(lang, "login.title")) }
-        p.muted { (ui::t(lang, "login.hint")) }
 
         form method="post" action="/login" {
             input type="hidden" name="name" value=(owner);
@@ -1604,14 +1603,20 @@ async fn login_submit(
                 None,
                 None,
             );
+            // Same card as the normal sign-in: one field, and the reason why.
             let body = html! {
-                (ui::banner("warn", ui::t(lang, "login.error"), ""))
+                (ui::auth_brand(&shop_name(&conn)))
+                (ui::auth_bismillah())
+
                 h1 { (ui::t(lang, "login.title")) }
+                div.form-error role="alert" { (ui::t(lang, "login.error")) }
+
                 form method="post" action="/login" {
-                    label for="name" { (ui::t(lang, "login.user")) }
-                    input type="text" id="name" name="name" value="Patron";
+                    input type="hidden" name="name" value=(name);
                     label for="password" { (ui::t(lang, "login.password")) }
-                    input type="password" id="password" name="password" required autofocus;
+                    input type="password" id="password" name="password"
+                          required autofocus autocomplete="current-password"
+                          placeholder="••••••••";
                     button.btn.btn-primary.btn-block.btn-lg type="submit" {
                         (ui::t(lang, "login.enter"))
                     }

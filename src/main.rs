@@ -5,6 +5,7 @@
 //!   store --port 9000     another port
 //!   store --data D:\shop  data folder (default: ./data)
 //!   store --doctor        self-check, prints what is wrong
+//!   store --version       which build is this
 //!   store --help
 
 use anyhow::Result;
@@ -32,6 +33,10 @@ fn main() -> Result<()> {
                     data_dir = PathBuf::from(value);
                 }
             }
+            "--version" | "-V" => {
+                println!("OneClick {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "--help" | "-h" => {
                 print_help();
                 return Ok(());
@@ -56,12 +61,14 @@ fn main() -> Result<()> {
 
 fn print_help() {
     println!(
-        "OneClick — caisse et gestion de magasin (local, hors ligne)\n\
+        "OneClick {version} — caisse et gestion de magasin (local, hors ligne)\n\
          \n\
+         store --version       afficher la version\n\
          store                 démarrer la caisse\n\
          store --port 9000     changer le port (défaut 8642)\n\
          store --data D:\\shop  dossier des données (défaut ./data)\n\
-         store --doctor        diagnostic de la base et de l'installation\n"
+         store --doctor        diagnostic de la base et de l'installation\n",
+        version = env!("CARGO_PKG_VERSION")
     );
 }
 

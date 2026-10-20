@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v0.5** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v0.5.6** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -150,6 +150,22 @@ If the build stops again, paste the error: it will be a concrete API detail, not
 
 ---
 
+## Versioning
+
+**Every commit bumps the version** — one command, all six manifests:
+
+```bash
+python3 scripts/bump_version.py          # 0.5.6 -> 0.5.7
+python3 scripts/bump_version.py minor    # 0.5.7 -> 0.6.0
+python3 scripts/bump_version.py 1.0.0    # explicit
+```
+
+The running build tells you which one it is, so a shop can answer *"which version?"*
+without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, and
+`store --version` prints the same string.
+
+---
+
 ## The rules this code follows
 
 1. **The till never waits on the network** — no network call exists in any request path.
@@ -164,6 +180,7 @@ If the build stops again, paste the error: it will be a concrete API detail, not
 
 | Version | What landed |
 |---|---|
+| **v0.5.6** | Login hint removed; the failed-login screen reuses the same card; version shown in the menu and via `store --version` |
 | **v0.5.5** | Build fixes: restored `LoginForm`, `Option<Markup>` no longer rendered bare, `pos_body` signature cleaned; linter now also catches bare `Option` renders |
 | **v0.5.4** | Sign-in card redesigned (password only, brand, language/theme in the footer); setup uses the same card; unused-variable warning fixed (#3) |
 | **v0.5.3** | Width caps, settings modal, toasts, retry button |

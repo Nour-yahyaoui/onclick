@@ -363,6 +363,13 @@ a:hover { text-decoration: underline; }
   inset-block-start: auto;
   inset-block-end: calc(100% + 8px);
 }
+.menu-version {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  border-block-start: 1px solid var(--hair);
+  margin-block-start: 4px;
+}
 .menu-panel .who {
   padding: 8px 10px 6px;
   font-size: var(--fs-sm);
@@ -1026,6 +1033,16 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
   margin-block: 0 .35rem 1rem;
   font-size: .95rem;
 }
+.form-error {
+  margin-block: 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
 .auth form { margin-block-start: 1.1rem; }
 .auth form .btn-lg { margin-block-start: 1.1rem; }
 
