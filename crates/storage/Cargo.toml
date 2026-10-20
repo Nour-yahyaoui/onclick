@@ -1,6 +1,6 @@
 [package]
 name = "storage"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 description = "SQLite (SQLCipher-ready) persistence, repositories, audit choke point."
 

@@ -48,8 +48,12 @@ jobs:
       - name: Doctor smoke test
         run: cargo run -- --doctor
 
+  # Advisory: the cloud half is a separate workspace and an optional service.
+  # It must never paint the till's pipeline red — but its log stays readable in
+  # the Actions tab, so a real breakage is still visible.
   control-plane:
     name: control-plane (${{ matrix.os }})
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

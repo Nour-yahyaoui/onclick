@@ -103,6 +103,20 @@ store.exe --doctor      # base, schéma, points à vérifier
 Si `--doctor` signale un problème, c'est la base du client qui est en cause, jamais
 l'installation : les données sont dans `data\store.db`, un seul fichier à copier.
 
+## Lire les couleurs de l'onglet Actions
+
+Une poussée lance **deux** workflows différents :
+
+| Workflow | Ce qu'il construit | Ce qu'il bloque |
+|---|---|---|
+| **ci** | la caisse, sur Linux **et** Windows, + les tests | une erreur de compilation ou un calcul faux |
+| **release** | `store.exe` + le zip, uniquement sur un tag `vX.Y.Z` | la publication |
+
+Dans **ci**, la moitié till (Linux + Windows) est bloquante ; le job
+`control-plane` est **consultatif** : la moitié nuage est un service séparé et
+optionnel, elle ne doit jamais empêcher la caisse de sortir. S'il est rouge, ça
+ne concerne pas le `.exe` — mais ça reste à réparer, le log est là pour ça.
+
 ## En cas de pépin pendant le build
 
 | Symptôme | Cause | Geste |

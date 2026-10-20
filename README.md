@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v0.6.1** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v0.6.2** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -192,6 +192,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v0.6.2** | **Control plane compiles again** (`tokio-postgres` was missing the `chrono` feature, so every `DATE` column failed to map) ; the cloud half can no longer paint the shop's pipeline red |
 | **v0.6.1** | **Le panier se vide après la vente** (il gardait les articles : le vidage visait la mauvaise session), et le ticket propose « Nouvelle vente ». Les pages ne sont plus rejouées depuis le cache du navigateur |
 | **v0.6.0** | **Publication automatique** : un tag `vX.Y.Z` fait construire `store.exe` par GitHub et publie la release (zip + lanceur double-clic + SHA-256) — voir `docs/OPS-002-release.md` |
 | **v0.5.9** | One sale, in full: every article with its quantity and price; **edit** a sale (stock is re-balanced by the difference); **cancel** a sale and the stock comes back to the shelf — the sale stays in the history. Debt maths fixed: the carnet no longer counts twice, cancelled sales leave the day total |
