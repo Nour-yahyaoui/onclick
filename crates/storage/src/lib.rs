@@ -1983,6 +1983,76 @@ pub fn stop_expense(conn: &Connection, actor: &User, id: &str) -> Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Backups — a real file, not a promise
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct BackupRow {
+    pub path: PathBuf,
+    pub at: String,
+    pub bytes: u64,
+}
+
+/// Copy the whole database into `<data>/backups/store-YYYY-MM-DD_HHMMSS.db`.
+/// `VACUUM INTO` is SQLite's own consistent-copy command: it works while the
+/// till is running, and the copy is never half-written.
+pub fn backup_into(conn: &Connection, data_dir: &Path) -> Result<PathBuf> {
+    let dir = data_dir.join("backups");
+    std::fs::create_dir_all(&dir).with_context(|| format!("créer {}", dir.display()))?;
+
+    let stamp = chrono::Local::now().format("%Y-%m-%d_%H%M%S").to_string();
+    let target = dir.join(format!("store-{stamp}.db"));
+
+    // Parameter binding keeps a path with spaces/quotes safe.
+    conn.execute("VACUUM INTO ?1", params![target.to_string_lossy().to_string()])
+        .context("VACUUM INTO (copie de la base)")?;
+
+    prune_backups(&dir, 14)?;
+    Ok(target)
+}
+
+/// Keep the last `keep` copies; older ones are removed. A shop that never
+/// cleans up ends up with a full disk, which is its own way of losing data.
+fn prune_backups(dir: &Path, keep: usize) -> Result<()> {
+    let mut copies = list_backups(dir);
+    if copies.len() <= keep {
+        return Ok(());
+    }
+    copies.sort_by(|a, b| b.at.cmp(&a.at));
+    for old in copies.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(&old.path);
+    }
+    Ok(())
+}
+
+/// Newest first. Missing folder = no backups yet, never an error.
+pub fn backups(data_dir: &Path) -> Vec<BackupRow> {
+    list_backups(&data_dir.join("backups"))
+}
+
+fn list_backups(dir: &Path) -> Vec<BackupRow> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("db") {
+            continue;
+        }
+        let bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        let at = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.trim_start_matches("store-").to_string())
+            .unwrap_or_default();
+        out.push(BackupRow { path, at, bytes });
+    }
+    out.sort_by(|a, b| b.at.cmp(&a.at));
+    out
+}
+
 pub fn default_data_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("data")
 }

@@ -348,7 +348,14 @@ fn fr(key: &str) -> &'static str {
         "theme.toggle" => "Jour / Nuit",
         "settings.title" => "Réglages",
         "settings.lang" => "Langue",
-        "settings.security" => "Vos données sont protégées par votre mot de passe. Sauvegarde automatique chaque soir.",
+        "settings.security" => "Vos données sont un seul fichier sur cet ordinateur. La protection par mot de passe existe ; le chiffrement du fichier n'est pas encore activé.",
+        "settings.backup" => "Sauvegarde",
+        "settings.backup_now" => "Sauvegarder maintenant",
+        "settings.backup_none" => "Aucune sauvegarde pour le moment. Faites-en une avant de fermer le magasin.",
+        "settings.backup_last" => "Dernière sauvegarde :",
+        "settings.backup_count" => "Sauvegardes gardées :",
+        "settings.backup_where" => "Elles vont dans le dossier data\\backups, à côté de la caisse. Copiez-le sur une clé USB de temps en temps.",
+        "toast.backup" => "Sauvegarde faite",
         _ => "?",
     }
 }
@@ -511,7 +518,14 @@ fn ar(key: &str) -> Option<&'static str> {
         "theme.toggle" => "نهار / ليل",
         "settings.title" => "الإعدادات",
         "settings.lang" => "اللغة",
-        "settings.security" => "بياناتك محمية بكلمة السر. نسخ احتياطي كل ليلة.",
+        "settings.security" => "بياناتك ملف واحد في هذا الحاسوب. الحماية بكلمة السر موجودة؛ أما تشفير الملف فمازال موش مفعّل.",
+        "settings.backup" => "نسخة احتياطية",
+        "settings.backup_now" => "خُذ نسخة الآن",
+        "settings.backup_none" => "ما فماش نسخة للتو. خُذ وحدة قبل ما تسكّر المحل.",
+        "settings.backup_last" => "آخر نسخة:",
+        "settings.backup_count" => "النسخ المحفوظة:",
+        "settings.backup_where" => "تتخزن في مجلد data\\backups حذا الصندوق. انقلها على clé USB من وقت لآخر.",
+        "toast.backup" => "تم أخذ النسخة",
         _ => return None,
     })
 }
@@ -674,7 +688,14 @@ fn en(key: &str) -> Option<&'static str> {
         "theme.toggle" => "Day / Night",
         "settings.title" => "Settings",
         "settings.lang" => "Language",
-        "settings.security" => "Your data is protected by your password. Automatic backup every evening.",
+        "settings.security" => "Your data is one file on this computer. Password protection exists; encrypting the file is not enabled yet.",
+        "settings.backup" => "Backup",
+        "settings.backup_now" => "Back up now",
+        "settings.backup_none" => "No backup yet. Make one before you close the shop.",
+        "settings.backup_last" => "Last backup:",
+        "settings.backup_count" => "Backups kept:",
+        "settings.backup_where" => "They go to the data\\backups folder, next to the till. Copy it to a USB stick now and then.",
+        "toast.backup" => "Backup done",
         _ => return None,
     })
 }

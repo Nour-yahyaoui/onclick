@@ -30,6 +30,8 @@ use ui::{Chrome, Lang, Nav, Theme};
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Db>>,
+    /// Where the database and its backups live. Needed to copy the file.
+    pub data_dir: Arc<PathBuf>,
 }
 
 pub async fn serve(data_dir: PathBuf, port: u16) -> Result<()> {
@@ -43,7 +45,10 @@ pub async fn serve(data_dir: PathBuf, port: u16) -> Result<()> {
         eprintln!("[attention] {problem}");
     }
 
-    let state = AppState { db: Arc::new(Mutex::new(conn)) };
+    let state = AppState {
+        db: Arc::new(Mutex::new(conn)),
+        data_dir: Arc::new(data_dir.clone()),
+    };
     let app = routes(state);
 
     let addr = format!("127.0.0.1:{port}");
@@ -90,6 +95,7 @@ pub fn routes(state: AppState) -> Router {
         .route("/carnet/new", post(carnet_new))
         .route("/carnet/writeoff", post(carnet_writeoff))
         .route("/settings", get(settings_page).post(settings_save))
+        .route("/settings/backup", post(settings_backup))
         .route("/assets/store.css", get(stylesheet))
         .route("/health", get(health))
         .with_state(state)
@@ -238,6 +244,7 @@ fn toast_text(lang: Lang, code: &str) -> Option<&'static str> {
         "opened" => ui::t(lang, "toast.opened"),
         "closed" => ui::t(lang, "toast.closed"),
         "added" => ui::t(lang, "toast.added"),
+        "backup" => ui::t(lang, "toast.backup"),
         "expense" => ui::t(lang, "toast.expense"),
         "expense_updated" => ui::t(lang, "toast.expense_updated"),
         "expense_stopped" => ui::t(lang, "toast.expense_stopped"),
@@ -2523,6 +2530,7 @@ async fn settings_page(
     };
 
     let shop = shop_name(&conn);
+    let copies = storage::backups(&state.data_dir);
     let notice = toast_from(&query, lang);
 
     // The till stays visible behind the dialog: settings never feels like another app.
@@ -2573,8 +2581,23 @@ async fn settings_page(
                         }
 
                         div.field {
-                            h3 { "Protection" }
+                            h3 { (ui::t(lang, "settings.backup")) }
                             p.muted { (ui::t(lang, "settings.security")) }
+                            form method="post" action="/settings/backup" {
+                                button.btn.btn-primary type="submit" {
+                                    (ui::t(lang, "settings.backup_now"))
+                                }
+                            }
+                            @if copies.is_empty() {
+                                p.muted { (ui::t(lang, "settings.backup_none")) }
+                            } @else {
+                                p.muted {
+                                    (ui::t(lang, "settings.backup_last")) " "
+                                    span dir="ltr" { (copies[0].at.replace('_', " ")) }
+                                }
+                                p.muted { (ui::t(lang, "settings.backup_count")) " " (copies.len()) }
+                            }
+                            p.muted { (ui::t(lang, "settings.backup_where")) }
                         }
                     }
                     div.modal-foot {
@@ -2601,6 +2624,34 @@ async fn settings_page(
 #[derive(Deserialize)]
 struct SettingsForm {
     shop_name: Option<String>,
+}
+
+async fn settings_backup(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    match storage::backup_into(&conn, &state.data_dir) {
+        Ok(_) => {
+            let _ = storage::audit(
+                &conn,
+                &user,
+                "create",
+                "settings",
+                "backup",
+                "Sauvegarde de la base effectuée",
+                None,
+                None,
+            );
+            Redirect::to("/settings?done=backup").into_response()
+        }
+        Err(err) => failure(lang, err),
+    }
 }
 
 async fn settings_save(

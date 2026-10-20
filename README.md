@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v1.0.0** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v1.0.1** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -218,6 +218,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v1.0.1** | **Sauvegarde réelle** (bouton « Sauvegarder maintenant », copie cohérente via `VACUUM INTO`, 14 dernières gardées) ; le réglage ne promet plus « sauvegarde automatique chaque soir » ni un chiffrement qui n'existe pas |
 | **v1.0** | **Sell what you never entered.** Scanning an unknown barcode no longer fails: name (optional) + price only, the sheet is created and goes straight into the sale; unnamed items show as « Code 123456 » and never as « rupture ». Product sheets show what they really sold, so prices settle over time. **Charges**: rent, water, power, maintenance — each with its own rhythm (month, quarter, year) and a per-day break-even |
 | **v0.6.2** | **Control plane compiles again** (`tokio-postgres` was missing the `chrono` feature, so every `DATE` column failed to map) ; the cloud half can no longer paint the shop's pipeline red |
 | **v0.6.1** | **Le panier se vide après la vente** (il gardait les articles : le vidage visait la mauvaise session), et le ticket propose « Nouvelle vente ». Les pages ne sont plus rejouées depuis le cache du navigateur |
