@@ -5,7 +5,19 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v0.5.8** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v0.6.0** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+
+---
+
+## Installer la caisse (Windows)
+
+Télécharger le zip de la dernière version :
+**<https://github.com/Nour-yahyaoui/desktop/releases/latest>** — le dézipper, puis
+double-cliquer sur **`OneClick.bat`**. Rien d'autre à installer ; les données restent
+dans `data\`, à côté de `store.exe`.
+
+Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.md)
+(un tag `vX.Y.Z` suffit — GitHub construit le `.exe` et publie la release).
 
 ---
 
@@ -180,6 +192,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v0.6.0** | **Publication automatique** : un tag `vX.Y.Z` fait construire `store.exe` par GitHub et publie la release (zip + lanceur double-clic + SHA-256) — voir `docs/OPS-002-release.md` |
 | **v0.5.9** | One sale, in full: every article with its quantity and price; **edit** a sale (stock is re-balanced by the difference); **cancel** a sale and the stock comes back to the shelf — the sale stays in the history. Debt maths fixed: the carnet no longer counts twice, cancelled sales leave the day total |
 | **v0.5.8** | Visible drag handle for the sidebar (replaces the invisible CSS grip), a real fold/unfold chevron, no scrollbar inside the rail |
 | **v0.5.7** | **Blank-page fix** (one grid column for two children), resizable sidebar, collapsible to an icon rail with every icon kept, nav icons |

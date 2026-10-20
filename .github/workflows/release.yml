@@ -1,0 +1,111 @@
+name: release
+
+# Publie un .exe Windows dans GitHub > Releases.
+#
+# Deux façons de déclencher :
+#   1. pousser un tag  ->  git tag v0.6.0 && git push origin v0.6.0
+#   2. bouton "Run workflow" dans l'onglet Actions (construit l'exe
+#      et le garde en artefact, sans créer de release)
+#
+# Le tag doit correspondre à la version de Cargo.toml, sinon le job
+# s'arrête tout de suite avec un message clair.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows .exe
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Lire la version et vérifier le tag
+        id: v
+        shell: pwsh
+        run: |
+          $line = Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+          $version = $line.Matches[0].Groups[1].Value
+          Write-Host "version  : $version"
+          Write-Host "ref      : ${{ github.ref_name }} (${{ github.ref_type }})"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
+            Write-Error "Le tag ${{ github.ref_name }} ne correspond pas a la version $version de Cargo.toml. Bump la version d'abord."
+            exit 1
+          }
+
+      - name: Tests (la caisse doit savoir compter)
+        run: cargo test --all
+
+      - name: Build store.exe
+        run: cargo build --release --bin store
+
+      - name: Emballage (exe + mode d'emploi + lanceur)
+        shell: pwsh
+        run: |
+          $v = "${{ steps.v.outputs.version }}"
+          $stage = "dist/OneClick-$v-windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item target/release/store.exe "$stage/store.exe"
+          Copy-Item README.md "$stage/LISEZMOI.md"
+
+          # Lanceur pour les non-informaticiens : double-clic, le navigateur s'ouvre.
+          $bat = @"
+          @echo off
+          title OneClick
+          cd /d "%~dp0"
+          start "" store.exe
+          ping -n 3 127.0.0.1 >nul
+          start "" http://localhost:8642
+          exit
+          "@
+          Set-Content -Encoding ASCII -Path "$stage/OneClick.bat" -Value $bat
+
+          $note = @"
+          OneClick $v
+
+          1. Dezipper ce dossier ou vous voulez (ex: C:\OneClick).
+          2. Double-cliquer sur OneClick.bat.
+          3. Le navigateur s'ouvre sur http://localhost:8642
+             (si rien ne s'ouvre, taper cette adresse a la main).
+
+          Vos donnees restent sur cet ordinateur, dans le dossier "data"
+          cree a cote de store.exe. Copiez ce dossier pour faire une
+          sauvegarde.
+
+          Ne pas supprimer "data" : c'est votre caisse.
+          "@
+          Set-Content -Encoding ASCII -Path "$stage/A_LIRE.txt" -Value $note
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/OneClick-$v-windows-x64.zip" -Force
+          $hash = (Get-FileHash "dist/OneClick-$v-windows-x64.zip" -Algorithm SHA256).Hash
+          "$hash  OneClick-$v-windows-x64.zip" | Set-Content -Encoding ASCII "dist/SHA256SUMS.txt"
+          Get-ChildItem dist | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OneClick-${{ steps.v.outputs.version }}-windows-x64
+          path: dist/*
+
+      - name: Publier la release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.v.outputs.version }}"
+          gh release create "${{ github.ref_name }}" `
+            "dist/OneClick-$v-windows-x64.zip" `
+            "dist/SHA256SUMS.txt" `
+            --title "OneClick $v" `
+            --generate-notes
