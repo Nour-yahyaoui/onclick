@@ -588,7 +588,11 @@ pub fn checkout(
     };
     let paid = total - credit;
 
-    let session_id = open_session_id(&tx)?;
+    // Careful: this is the *cash* session, not the browser session that owns
+    // the draft cart. Shadowing `session_id` here used to make the final
+    // `DELETE FROM draft_lines` target the wrong id — the cart stayed full
+    // after a sale. Keep the two names apart, always.
+    let cash_session = open_session_id(&tx)?;
     let count: i64 = tx.query_row("SELECT COUNT(*) FROM sales", [], |r| r.get(0))?;
     let number = format!("V-{:05}", count + 1);
     let sale_id = new_id();
@@ -598,7 +602,19 @@ pub fn checkout(
     tx.execute(
         "INSERT INTO sales (id, number, business_day, created_at, user_id, total, paid, credit, cost_total, payment, status, session_id)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'closed', ?11)",
-        params![sale_id, number, day, now, actor.id, total, paid, credit, cost_total, payment.as_str(), session_id],
+        params![
+            sale_id,
+            number,
+            day,
+            now,
+            actor.id,
+            total,
+            paid,
+            credit,
+            cost_total,
+            payment.as_str(),
+            cash_session
+        ],
     )?;
 
     for line in &lines {

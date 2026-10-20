@@ -143,7 +143,14 @@ fn shop_name(conn: &Db) -> String {
 }
 
 fn page_response(markup: Markup) -> Response {
-    Html(markup.into_string()).into_response()
+    let mut response = Html(markup.into_string()).into_response();
+    // The till is stateful: never let the browser replay an old page (and an
+    // old cart) from its back/forward cache after a sale.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, must-revalidate"),
+    );
+    response
 }
 
 fn back(request: &HeaderMap) -> String {
@@ -1444,8 +1451,8 @@ async fn receipt_page(
                     }
                 }
                 div style="display:flex;gap:.5rem;margin-block-start:1rem" {
-                    button.btn.btn-primary type="button" onclick="window.print()" { "Imprimer" }
-                    a.btn.btn-ghost href="/" { (ui::t(lang, "common.back")) }
+                    a.btn.btn-primary href="/" { (ui::t(lang, "pos.new_sale")) }
+                    button.btn.btn-ghost type="button" onclick="window.print()" { "Imprimer" }
                 }
             }
         };
