@@ -46,9 +46,11 @@ jobs:
               grep -nE "^(error|warning: unused)" -A3 build.log | head -120
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
-            grep -E "^error" build.log | sort -u | head -30 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
+            # Everything that matters, as annotations: compiler errors AND test
+            # failures (a wrong number must be readable too, not just a red X).
+            grep -nE "^(error|---- |test result:|thread )" build.log | head -40 \
+              | while IFS= read -r line; do echo "::error::$line"; done
+            tail -40 build.log | while IFS= read -r line; do echo "::error::TAIL $line"; done
             exit 1
           fi
 
