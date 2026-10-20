@@ -30,8 +30,27 @@ jobs:
         run: python3 scripts/lint_maud.py
 
       # Blocking: the money maths must always hold, and the binary must build.
+      # The errors are echoed as annotations and into the job summary, so a
+      # failure is readable from the GitHub UI (and from `gh api`) without
+      # downloading a log.
       - name: Unit tests (domain money/cart/VAT)
-        run: cargo test --all
+        shell: bash
+        run: |
+          set +e
+          cargo test --all 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            {
+              echo "## Erreurs de compilation"
+              echo '```'
+              grep -nE "^(error|warning: unused)" -A3 build.log | head -120
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            grep -E "^error" build.log | sort -u | head -30 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          fi
 
       - name: Build (release)
         run: cargo build --release
