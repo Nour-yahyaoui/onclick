@@ -48,3 +48,4 @@ Implementation has started (**OneClick v0.5**, see `../README.md`). These record
 ## Reference assets
 
 `assets/reference-simple-pos.png` — the visual reference the theme is derived from.
+- [ADR-016](ADR-016-inventory-fills-itself.md) — the inventory fills itself; fixed charges

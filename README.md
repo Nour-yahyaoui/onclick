@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v0.6.2** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v1.0.0** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -21,6 +21,26 @@ Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.
 
 ---
 
+## Le magasin qui n'a jamais saisi son stock
+
+C'est le cas normal, pas l'exception. OneClick part de là :
+
+1. le client pose un article sur le comptoir, vous scannez son code-barres ;
+2. le code est inconnu ? Une feuille s'ouvre : **nom (facultatif)**, **prix de
+   vente**, prix d'achat (facultatif). Deux champs suffisent, l'article part
+   dans la vente ;
+3. la fiche existe désormais. Sans nom, elle s'appelle « Code 123456 » ;
+   son stock n'est pas compté, donc la caisse ne vous dira jamais « rupture » ;
+4. plus tard, au calme, la fiche vous montre **ce que l'article a réellement
+   vendu** — c'est avec ça que vous fixez le prix et le prix d'achat.
+
+Et pour connaître votre vrai coût de revient : **Charges** (loyer, eau,
+électricité, entretien), chacune avec sa périodicité — par mois, par trimestre
+ou par an. L'écran affiche le total mensuel et **ce qu'il faut encaisser chaque
+jour** pour les couvrir. Décision complète : [`docs/ADR-016`](docs/ADR-016-inventory-fills-itself.md).
+
+---
+
 ## Status at a glance
 
 | Area | v0.5 |
@@ -29,6 +49,8 @@ Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.
 | **Cloud control plane** | ✅ runs standalone: pairing, lease stub, sync ingest, read-only dashboard, `/health` |
 | **Encryption at rest** | ⚠️ not yet (SQLCipher is next; `--doctor` says so out loud) |
 | **Roles / cashier PIN** | ⚠️ not yet — single "Patron" account |
+| **Selling what is not in the system** | ✅ scan an unknown code → two questions → the sheet exists, the sale goes through |
+| **Fixed charges (rent, water, power…)** | ✅ per month / per quarter / per year, each with its own rhythm |
 | **Batches, IMEI, images, deliveries** | ❌ the phone-shop stock layer is not built yet |
 | **Exe → cloud sync** | ❌ endpoints exist, the agent inside the exe does not |
 
@@ -48,6 +70,10 @@ Sortir une version soi-même : [`docs/OPS-002-release.md`](docs/OPS-002-release.
 | **Toasts** after every action + **Réessayer** on errors | ✅ |
 | **Sidebar**: quick sell, search/scan, Vendre · Ventes · Carnet · Produits, Caisse/Z · Journal · Réglages | ✅ |
 | **Ventes** page: the day book, one tap to reprint a ticket | ✅ |
+| **Sell what you never entered**: unknown barcode → name (optional) + price only, added to the sale | ✅ |
+| **Inventory that fills itself**: unnamed items show as « Code 123456 », never « rupture » | ✅ |
+| **Product sheet** shows what it really sold, to fix the price later | ✅ |
+| **Charges**: rent / water / power / maintenance, per month, quarter or year | ✅ |
 | Bismillah masthead (Amiri/naskh stack) on every page | ✅ |
 | First run: 3 plain questions → a working till with 6 sample products | ✅ |
 | Owner password (Argon2id), session ids stored hashed | ✅ |
@@ -192,6 +218,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v1.0** | **Sell what you never entered.** Scanning an unknown barcode no longer fails: name (optional) + price only, the sheet is created and goes straight into the sale; unnamed items show as « Code 123456 » and never as « rupture ». Product sheets show what they really sold, so prices settle over time. **Charges**: rent, water, power, maintenance — each with its own rhythm (month, quarter, year) and a per-day break-even |
 | **v0.6.2** | **Control plane compiles again** (`tokio-postgres` was missing the `chrono` feature, so every `DATE` column failed to map) ; the cloud half can no longer paint the shop's pipeline red |
 | **v0.6.1** | **Le panier se vide après la vente** (il gardait les articles : le vidage visait la mauvaise session), et le ticket propose « Nouvelle vente ». Les pages ne sont plus rejouées depuis le cache du navigateur |
 | **v0.6.0** | **Publication automatique** : un tag `vX.Y.Z` fait construire `store.exe` par GitHub et publie la release (zip + lanceur double-clic + SHA-256) — voir `docs/OPS-002-release.md` |

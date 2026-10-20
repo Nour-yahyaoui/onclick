@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 
 pub const SCHEMA_SQL: &str = include_str!("../../../migrations/0001_init.sql");
 pub const SCHEMA_SQL_V2: &str = include_str!("../../../migrations/0002_sessions.sql");
+pub const SCHEMA_SQL_V3: &str = include_str!("../../../migrations/0003_expenses_and_scan.sql");
 
 /// Re-exported so the web layer can hold the connection without depending
 /// on rusqlite directly.
@@ -62,6 +63,11 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     if version < 2 {
         conn.execute_batch(SCHEMA_SQL_V2)
             .context("migration 0002_sessions.sql failed")?;
+        version = 2;
+    }
+    if version < 3 {
+        conn.execute_batch(SCHEMA_SQL_V3)
+            .context("migration 0003_expenses_and_scan.sql failed")?;
     }
     Ok(())
 }
@@ -347,7 +353,15 @@ pub struct Product {
     pub price: i64,
     pub cost: i64,
     pub stock: i64,
+    /// false = the shop never counted this item (created by an unknown scan).
+    /// The till must then say nothing about stock instead of shouting "0".
+    pub counted: bool,
 }
+
+/// A product may have no name yet (a scanned code, sheet left for later).
+/// Every read path uses this, so the whole app speaks of "Code 123456".
+const NAME_EXPR: &str =
+    "COALESCE(NULLIF(TRIM(p.name), ''), 'Code ' || COALESCE(p.barcode, '?'))";
 
 pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Product>> {
     let mut out = Vec::new();
@@ -359,28 +373,32 @@ pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Produ
             price: r.get(3)?,
             cost: r.get(4)?,
             stock: r.get(5)?,
+            counted: r.get::<_, i64>(6)? != 0,
         })
     };
 
     match query.map(str::trim).filter(|q| !q.is_empty()) {
         Some(q) => {
             let like = format!("%{}%", q.to_lowercase());
-            let mut stmt = conn.prepare(
-                "SELECT id, name, barcode, ref_price, last_cost, stock_qty
-                 FROM products WHERE is_active = 1 AND archived_at IS NULL
-                   AND (LOWER(name) LIKE ?1 OR barcode = ?2)
-                 ORDER BY name LIMIT 60",
-            )?;
+            let mut stmt = conn.prepare(&format!(
+                "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
+                        p.tracks_stock
+                 FROM products p WHERE p.is_active = 1 AND p.archived_at IS NULL
+                   AND (LOWER(COALESCE(p.name, '')) LIKE ?1 OR p.barcode = ?2 OR p.barcode LIKE ?1)
+                 ORDER BY {NAME_EXPR} LIMIT 60"
+            ))?;
             let rows = stmt.query_map(params![like, q], map)?;
             for row in rows {
                 out.push(row?);
             }
         }
         None => {
-            let mut stmt = conn.prepare(
-                "SELECT id, name, barcode, ref_price, last_cost, stock_qty
-                 FROM products WHERE is_active = 1 AND archived_at IS NULL ORDER BY name LIMIT 60",
-            )?;
+            let mut stmt = conn.prepare(&format!(
+                "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
+                        p.tracks_stock
+                 FROM products p WHERE p.is_active = 1 AND p.archived_at IS NULL
+                 ORDER BY {NAME_EXPR} LIMIT 60"
+            ))?;
             let rows = stmt.query_map([], map)?;
             for row in rows {
                 out.push(row?);
@@ -393,8 +411,12 @@ pub fn list_products(conn: &Connection, query: Option<&str>) -> Result<Vec<Produ
 pub fn find_by_barcode(conn: &Connection, barcode: &str) -> Result<Option<Product>> {
     Ok(conn
         .query_row(
-            "SELECT id, name, barcode, ref_price, last_cost, stock_qty
-             FROM products WHERE is_active = 1 AND archived_at IS NULL AND barcode = ?1",
+            &format!(
+                "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
+                        p.tracks_stock
+                 FROM products p
+                 WHERE p.is_active = 1 AND p.archived_at IS NULL AND p.barcode = ?1"
+            ),
             params![barcode],
             |r| {
                 Ok(Product {
@@ -404,6 +426,7 @@ pub fn find_by_barcode(conn: &Connection, barcode: &str) -> Result<Option<Produc
                     price: r.get(3)?,
                     cost: r.get(4)?,
                     stock: r.get(5)?,
+                    counted: r.get::<_, i64>(6)? != 0,
                 })
             },
         )
@@ -464,7 +487,9 @@ pub struct DraftLine {
 
 pub fn draft_lines(conn: &Connection, session_id: &str) -> Result<Vec<DraftLine>> {
     let mut stmt = conn.prepare(
-        "SELECT d.product_id, p.name, d.qty, d.unit_price, p.last_cost
+        "SELECT d.product_id,
+                COALESCE(NULLIF(TRIM(p.name), ''), 'Code ' || COALESCE(p.barcode, '?')),
+                d.qty, d.unit_price, p.last_cost
          FROM draft_lines d JOIN products p ON p.id = d.product_id
          WHERE d.session_id = ?1 ORDER BY p.name",
     )?;
@@ -798,8 +823,11 @@ pub fn today_totals(conn: &Connection) -> Result<(i64, i64)> {
 
 pub fn get_product(conn: &Connection, id: &str) -> Result<Product> {
     let product = conn.query_row(
-        "SELECT id, name, barcode, ref_price, last_cost, stock_qty
-           FROM products WHERE id = ?1",
+        &format!(
+            "SELECT p.id, {NAME_EXPR}, p.barcode, p.ref_price, p.last_cost, p.stock_qty,
+                    p.tracks_stock
+               FROM products p WHERE p.id = ?1"
+        ),
         params![id],
         |r| {
             Ok(Product {
@@ -809,6 +837,7 @@ pub fn get_product(conn: &Connection, id: &str) -> Result<Product> {
                 price: r.get(3)?,
                 cost: r.get(4)?,
                 stock: r.get(5)?,
+                counted: r.get::<_, i64>(6)? != 0,
             })
         },
     )?;
@@ -1664,6 +1693,325 @@ pub fn cancel_sale(conn: &Connection, actor: &User, sale_id: &str, reason: Optio
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Selling what is not in the system yet (inventory that fills itself by time)
+// ---------------------------------------------------------------------------
+//
+// The shop does not enter its stock in advance. It scans, sells, and only then
+// — when there is a quiet moment — completes the sheet. So a product may exist
+// with: no name, no purchase price, and a stock that is not counted at all.
+// Nothing here is ever a reason to refuse a sale.
+
+/// Create a product straight from a barcode scanned at the till.
+/// `name` may be empty (the till falls back to "Code 123456"), `cost` may be 0.
+/// Stock is NOT tracked: `stock_qty` stays 0 and `tracks_stock` is 0 so the
+/// shop is never told it has "0 in stock" — it never claimed to have any.
+pub fn create_scanned_product(
+    conn: &Connection,
+    actor: &User,
+    barcode: &str,
+    name: &str,
+    price: i64,
+    cost: i64,
+) -> Result<String> {
+    let tx = conn.unchecked_transaction()?;
+    let id = new_id();
+    let now = now_iso();
+    let name = name.trim();
+
+    // Scanning the same code twice must not create a twin.
+    if let Some(existing) = find_by_barcode(&tx, barcode)? {
+        return Ok(existing.id);
+    }
+
+    tx.execute(
+        "INSERT INTO products (id, name, barcode, ref_price, last_cost, stock_qty, stock_avg_cost,
+                               tracks_stock, origin, created_at, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?5, 0, 'scan', ?6, ?6, ?7)",
+        params![id, name, barcode, price, cost, now, actor.id],
+    )?;
+
+    let what = if name.is_empty() {
+        format!("code {barcode}")
+    } else {
+        format!("{name} (code {barcode})")
+    };
+    audit(
+        &tx,
+        actor,
+        "create",
+        "product",
+        &id,
+        &format!(
+            "Produit créé à la caisse : {what} — prix {}",
+            domain::format_money_tnd(price)
+        ),
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(id)
+}
+
+#[derive(Debug, Clone)]
+pub struct ProductStats {
+    pub sold_qty: i64,
+    pub revenue: i64,
+    pub sales: i64,
+    pub last_sold: Option<String>,
+}
+
+/// What this product actually did — the shop learns its own prices over time.
+pub fn product_stats(conn: &Connection, product_id: &str) -> Result<ProductStats> {
+    Ok(conn.query_row(
+        "SELECT COALESCE(SUM(sl.qty), 0), COALESCE(SUM(sl.line_total), 0),
+                COUNT(DISTINCT sl.sale_id), MAX(s.created_at)
+           FROM sale_lines sl JOIN sales s ON s.id = sl.sale_id
+          WHERE sl.product_id = ?1 AND s.status = 'closed'",
+        params![product_id],
+        |r| {
+            Ok(ProductStats {
+                sold_qty: r.get(0)?,
+                revenue: r.get(1)?,
+                sales: r.get(2)?,
+                last_sold: r.get(3)?,
+            })
+        },
+    )?)
+}
+
+// ---------------------------------------------------------------------------
+// Fixed charges: rent, water, power, maintenance — each with its own period
+// ---------------------------------------------------------------------------
+
+pub struct ExpenseRow {
+    pub id: String,
+    pub label: String,
+    pub kind: String,
+    pub amount: i64,
+    pub period: String,
+    pub start_day: String,
+    pub note: Option<String>,
+    pub active: bool,
+}
+
+/// How many months one payment covers. This is the only place the rule lives.
+pub fn period_months(period: &str) -> i64 {
+    match period {
+        "quarter" => 3,
+        "year" => 12,
+        _ => 1,
+    }
+}
+
+pub fn normalize_period(period: &str) -> &'static str {
+    match period {
+        "quarter" => "quarter",
+        "year" => "year",
+        _ => "month",
+    }
+}
+
+pub fn normalize_kind(kind: &str) -> &'static str {
+    match kind {
+        "rent" => "rent",
+        "power" => "power",
+        "water" => "water",
+        "maintenance" => "maintenance",
+        "telecom" => "telecom",
+        _ => "other",
+    }
+}
+
+pub fn list_expenses(conn: &Connection) -> Result<Vec<ExpenseRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, label, kind, amount_millimes, period, start_day, note, is_active
+           FROM expenses
+          ORDER BY is_active DESC, kind ASC, label ASC",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ExpenseRow {
+            id: r.get(0)?,
+            label: r.get(1)?,
+            kind: r.get(2)?,
+            amount: r.get(3)?,
+            period: r.get(4)?,
+            start_day: r.get(5)?,
+            note: r.get(6)?,
+            active: r.get::<_, i64>(7)? != 0,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// What the shop must earn every month just to keep the lights on.
+/// Rounded down to the millime: never promise a cost lower than reality.
+pub fn monthly_expenses(conn: &Connection) -> Result<i64> {
+    let rows = list_expenses(conn)?;
+    Ok(rows
+        .iter()
+        .filter(|e| e.active)
+        .map(|e| e.amount / period_months(&e.period))
+        .sum())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn create_expense(
+    conn: &Connection,
+    actor: &User,
+    label: &str,
+    kind: &str,
+    amount: i64,
+    period: &str,
+    start_day: &str,
+    note: Option<&str>,
+) -> Result<String> {
+    let tx = conn.unchecked_transaction()?;
+    let id = new_id();
+    let now = now_iso();
+    let label = label.trim();
+    let label = if label.is_empty() { "Charge" } else { label };
+
+    tx.execute(
+        "INSERT INTO expenses (id, label, kind, amount_millimes, period, start_day, note,
+                               is_active, created_by, created_at, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?9, ?8)",
+        params![
+            id,
+            label,
+            normalize_kind(kind),
+            amount.max(0),
+            normalize_period(period),
+            start_day,
+            note,
+            actor.id,
+            now
+        ],
+    )?;
+    audit(
+        &tx,
+        actor,
+        "create",
+        "expense",
+        &id,
+        &format!(
+            "Charge ajoutée : {label} — {} {}",
+            domain::format_money_tnd(amount),
+            match normalize_period(period) {
+                "quarter" => "par trimestre",
+                "year" => "par an",
+                _ => "par mois",
+            }
+        ),
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(id)
+}
+
+pub fn update_expense(
+    conn: &Connection,
+    actor: &User,
+    id: &str,
+    label: &str,
+    kind: &str,
+    amount: i64,
+    period: &str,
+    note: Option<&str>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    let label = label.trim();
+    let label = if label.is_empty() { "Charge" } else { label };
+    tx.execute(
+        "UPDATE expenses
+            SET label = ?2, kind = ?3, amount_millimes = ?4, period = ?5, note = ?6,
+                updated_at = ?7, updated_by = ?8
+          WHERE id = ?1",
+        params![
+            id,
+            label,
+            normalize_kind(kind),
+            amount.max(0),
+            normalize_period(period),
+            note,
+            now_iso(),
+            actor.id
+        ],
+    )?;
+    audit(
+        &tx,
+        actor,
+        "update",
+        "expense",
+        id,
+        &format!(
+            "Charge modifiée : {label} — {}",
+            domain::format_money_tnd(amount)
+        ),
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Stop a charge (shop closed a contract…). Never deleted: a past month must
+/// stay explainable. `stopped_day` lets a later report cut it at the right date.
+pub fn stop_expense(conn: &Connection, actor: &User, id: &str) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE expenses SET is_active = 0, stopped_day = ?2, updated_at = ?3, updated_by = ?4
+          WHERE id = ?1",
+        params![id, today_key(), now_iso(), actor.id],
+    )?;
+    audit(
+        &tx,
+        actor,
+        "update",
+        "expense",
+        id,
+        "Charge arrêtée",
+        None,
+        None,
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn default_data_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("data")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_payment_covers_its_period() {
+        assert_eq!(period_months("month"), 1);
+        assert_eq!(period_months("quarter"), 3);
+        assert_eq!(period_months("year"), 12);
+        // anything unknown must be treated as monthly, never as free
+        assert_eq!(period_months("fortnight"), 1);
+    }
+
+    #[test]
+    fn unknown_period_and_kind_are_tamed() {
+        assert_eq!(normalize_period("week"), "month");
+        assert_eq!(normalize_period("year"), "year");
+        assert_eq!(normalize_kind("taxes"), "other");
+        assert_eq!(normalize_kind("rent"), "rent");
+    }
+
+    #[test]
+    fn a_quarter_costs_a_third_of_itself_every_month() {
+        // 900 TND per quarter = 300 TND per month, to the millime
+        assert_eq!(900_000 / period_months("quarter"), 300_000);
+        assert_eq!(1_200_000 / period_months("year"), 100_000);
+    }
 }

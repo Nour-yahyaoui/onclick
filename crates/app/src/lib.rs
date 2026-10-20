@@ -76,7 +76,12 @@ pub fn routes(state: AppState) -> Router {
         .route("/session/open", post(session_open))
         .route("/session/close", post(session_close))
         .route("/receipt/{id}", get(receipt_page))
+        .route("/products/quick", get(product_quick_page).post(product_quick_create))
+        .route("/expenses", get(expenses_page).post(expense_create))
+        .route("/expenses/{id}", post(expense_update))
+        .route("/expenses/{id}/stop", post(expense_stop))
         .route("/cart/add", post(cart_add))
+        .route("/cart/scan", post(cart_scan))
         .route("/cart/qty", post(cart_qty))
         .route("/cart/price", post(cart_price))
         .route("/checkout", post(checkout))
@@ -232,6 +237,10 @@ fn toast_text(lang: Lang, code: &str) -> Option<&'static str> {
         "written_off" => ui::t(lang, "toast.written_off"),
         "opened" => ui::t(lang, "toast.opened"),
         "closed" => ui::t(lang, "toast.closed"),
+        "added" => ui::t(lang, "toast.added"),
+        "expense" => ui::t(lang, "toast.expense"),
+        "expense_updated" => ui::t(lang, "toast.expense_updated"),
+        "expense_stopped" => ui::t(lang, "toast.expense_stopped"),
         "edited" => ui::t(lang, "toast.edited"),
         "cancelled" => ui::t(lang, "toast.cancelled"),
         _ => return None,
@@ -321,6 +330,7 @@ fn pos_body(
                                 name: p.name.as_str(),
                                 price: p.price,
                                 stock: p.stock,
+                                counted: p.counted,
                             }))
                         }
                     }
@@ -334,6 +344,17 @@ fn pos_body(
                         span.count { (drafts.len()) }
                     }
                 }
+
+                /* The barcode machine always has somewhere to type.
+                   Unknown code -> /sales? no: a two-question sheet, never a refusal. */
+                form.scan-box method="post" action="/cart/scan" autocomplete="off" {
+                    input type="text" name="code" dir="ltr" inputmode="numeric"
+                          placeholder=(ui::t(lang, "scan.placeholder"))
+                          aria-label=(ui::t(lang, "scan.placeholder"))
+                          autofocus;
+                    button.btn.btn-primary type="submit" { (ui::t(lang, "scan.add")) }
+                }
+                p.scan-hint { (ui::t(lang, "scan.hint")) }
 
                 @if drafts.is_empty() {
                     (ui::empty_state(ui::t(lang, "pos.empty_cart")))
@@ -588,6 +609,7 @@ async fn products_page(
                       value=(params.q.clone().unwrap_or_default());
                 button.btn type="submit" { "🔍" }
             }
+            p.muted style="margin-block:0 12px" { (ui::t(lang, "products.fills_itself")) }
             div.card {
                 table.list {
                     thead {
@@ -602,13 +624,22 @@ async fn products_page(
                     tbody {
                         @for p in &products {
                             tr {
-                                td { (p.name) }
-                                td.muted { (p.barcode.clone().unwrap_or_default()) }
-                                td.money-cell { (ui::money(p.price)) }
-                                td.money-cell { (p.stock) }
+                                td {
+                                    (p.name)
+                                    @if p.price <= 0 {
+                                        span.pill.credit { (ui::t(lang, "products.no_price")) }
+                                    }
+                                }
+                                td.muted dir="ltr" { (p.barcode.clone().unwrap_or_default()) }
+                                td.money-cell {
+                                    @if p.price <= 0 { "—" } @else { (ui::money(p.price)) }
+                                }
+                                td.money-cell {
+                                    @if p.counted { (p.stock) } @else { "—" }
+                                }
                                 td {
                                     a.btn.btn-ghost href=(format!("/products/{}/edit", p.id)) {
-                                        "Modifier"
+                                        (ui::t(lang, "common.edit"))
                                     }
                                 }
                             }
@@ -971,6 +1002,485 @@ fn payment_label(lang: Lang, payment: &str) -> &'static str {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Scan at the till — including codes the shop never entered
+// ---------------------------------------------------------------------------
+//
+// The rule of this shop: the barcode machine must always work. If the code is
+// known, it drops in the cart. If it is unknown, we do not refuse and we do not
+// lecture: we ask for a name (optional) and a selling price (only), create the
+// product, and put it in the cart. The sheet can be completed later.
+
+/// Percent-encode the few characters a barcode could contain in a query.
+fn urlencode(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for byte in raw.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+#[derive(Deserialize)]
+struct ScanForm {
+    code: String,
+}
+
+async fn cart_scan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<ScanForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(sid) = cookie(&headers, "sid") else {
+        return Redirect::to("/login").into_response();
+    };
+    if user_of(&conn, &headers).is_none() {
+        return Redirect::to("/login").into_response();
+    }
+
+    let code = form.code.trim();
+    if code.is_empty() {
+        return Redirect::to("/").into_response();
+    }
+
+    match storage::find_by_barcode(&conn, code) {
+        Ok(Some(product)) => match storage::draft_add(&conn, &sid, &product.id) {
+            Ok(()) => Redirect::to("/?done=added").into_response(),
+            Err(err) => failure(lang, err),
+        },
+        // Unknown code: never a dead end — open the two-question sheet.
+        Ok(None) => {
+            Redirect::to(&format!("/products/quick?code={}", urlencode(code))).into_response()
+        }
+        Err(err) => failure(lang, err),
+    }
+}
+
+#[derive(Deserialize)]
+struct QuickQuery {
+    code: Option<String>,
+}
+
+async fn product_quick_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<QuickQuery>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let code = query.code.unwrap_or_default().trim().to_string();
+
+    let body = html! {
+        div.page-head {
+            h1 { (ui::t(lang, "quick.title")) }
+            span.spacer {}
+            a.btn.btn-ghost href="/" { (ui::t(lang, "quick.later")) }
+        }
+
+        div.card.card-pad style="max-inline-size:560px" {
+            p.muted { (ui::t(lang, "quick.intro")) }
+            div.quick-code dir="ltr" { (code) }
+
+            form method="post" action="/products/quick" {
+                input type="hidden" name="barcode" value=(code);
+
+                label for="name" { (ui::t(lang, "quick.name")) }
+                input type="text" id="name" name="name" autofocus
+                      placeholder=(ui::t(lang, "quick.name_hint"));
+
+                label for="price" { (ui::t(lang, "quick.price")) }
+                input type="text" id="price" name="price" dir="ltr" inputmode="decimal"
+                      placeholder="0.000";
+
+                label for="cost" { (ui::t(lang, "quick.cost")) }
+                input type="text" id="cost" name="cost" dir="ltr" inputmode="decimal"
+                      placeholder="0.000";
+
+                label for="qty" { (ui::t(lang, "quick.qty")) }
+                input type="number" id="qty" name="qty" value="1" min="1" dir="ltr";
+
+                button.btn.btn-primary.btn-block.btn-lg type="submit"
+                       style="margin-block-start:1rem" {
+                    (ui::t(lang, "quick.add"))
+                }
+            }
+            p.muted style="margin-block-start:.75rem" { (ui::t(lang, "quick.note")) }
+        }
+    };
+
+    page_response(ui::page(
+        &chrome(&conn, &headers, &user, Nav::Sell, 0, ui::t(lang, "quick.title")),
+        body,
+    ))
+}
+
+#[derive(Deserialize)]
+struct QuickForm {
+    barcode: String,
+    name: Option<String>,
+    price: Option<String>,
+    cost: Option<String>,
+    qty: Option<String>,
+}
+
+async fn product_quick_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<QuickForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let Some(sid) = cookie(&headers, "sid") else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let barcode = form.barcode.trim().to_string();
+    if barcode.is_empty() {
+        return Redirect::to("/").into_response();
+    }
+    let name = form.name.unwrap_or_default();
+    let price = form.price.as_deref().and_then(parse_money).unwrap_or(0);
+    let cost = form.cost.as_deref().and_then(parse_money).unwrap_or(0);
+    let qty = form
+        .qty
+        .as_deref()
+        .and_then(|q| q.trim().parse::<i64>().ok())
+        .unwrap_or(1)
+        .max(1);
+
+    match storage::create_scanned_product(&conn, &user, &barcode, &name, price, cost) {
+        Ok(product_id) => {
+            let _ = storage::draft_set_qty(&conn, &sid, &product_id, qty);
+            Redirect::to("/?done=added").into_response()
+        }
+        Err(err) => failure(lang, err),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Fixed charges: the rent, the water, the power, the maintenance
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ExpenseForm {
+    label: Option<String>,
+    kind: Option<String>,
+    amount: Option<String>,
+    period: Option<String>,
+    note: Option<String>,
+    start_day: Option<String>,
+}
+
+fn expense_from(form: &ExpenseForm) -> (String, String, i64, String, Option<String>, String) {
+    let label = form.label.clone().unwrap_or_default().trim().to_string();
+    let kind = form.kind.clone().unwrap_or_else(|| "other".to_string());
+    let amount = form.amount.as_deref().and_then(parse_money).unwrap_or(0);
+    let period = form.period.clone().unwrap_or_else(|| "month".to_string());
+    let note = form
+        .note
+        .clone()
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty());
+    let start_day = form
+        .start_day
+        .clone()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let start_day = if start_day.is_empty() {
+        storage::today_key()
+    } else {
+        start_day
+    };
+    (label, kind, amount, period, note, start_day)
+}
+
+fn kind_label(lang: Lang, kind: &str) -> &'static str {
+    match kind {
+        "rent" => ui::t(lang, "expense.kind.rent"),
+        "power" => ui::t(lang, "expense.kind.power"),
+        "water" => ui::t(lang, "expense.kind.water"),
+        "maintenance" => ui::t(lang, "expense.kind.maintenance"),
+        "telecom" => ui::t(lang, "expense.kind.telecom"),
+        _ => ui::t(lang, "expense.kind.other"),
+    }
+}
+
+fn period_label(lang: Lang, period: &str) -> &'static str {
+    match period {
+        "quarter" => ui::t(lang, "expense.period.quarter"),
+        "year" => ui::t(lang, "expense.period.year"),
+        _ => ui::t(lang, "expense.period.month"),
+    }
+}
+
+async fn expenses_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<DoneQuery>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+
+    let notice = toast_from(&query, lang);
+    let result = (|| -> Result<Markup> {
+        let rows = storage::list_expenses(&conn)?;
+        let monthly = storage::monthly_expenses(&conn)?;
+        let per_day = monthly / 30;
+
+        let body = html! {
+            @if let Some(toast) = notice { (toast) }
+
+            div.page-head {
+                h1 { (ui::t(lang, "expense.title")) }
+                span.muted { (ui::t(lang, "expense.intro")) }
+            }
+
+            div.cards-row {
+                div.card.card-pad {
+                    div.muted { (ui::t(lang, "expense.per_month")) }
+                    div.big-money { (ui::money_tnd(monthly)) }
+                }
+                div.card.card-pad {
+                    div.muted { (ui::t(lang, "expense.per_day")) }
+                    div.big-money { (ui::money_tnd(per_day)) }
+                    div.muted { (ui::t(lang, "expense.per_day_hint")) }
+                }
+            }
+
+            div.card.card-pad {
+                h2 { (ui::t(lang, "expense.add")) }
+                form method="post" action="/expenses" {
+                    div.field-row {
+                        div {
+                            label for="label" { (ui::t(lang, "expense.label")) }
+                            input type="text" id="label" name="label"
+                                  placeholder=(ui::t(lang, "expense.label_hint"));
+                        }
+                        div {
+                            label for="kind" { (ui::t(lang, "expense.kind")) }
+                            select id="kind" name="kind" {
+                                option value="rent" { (ui::t(lang, "expense.kind.rent")) }
+                                option value="power" { (ui::t(lang, "expense.kind.power")) }
+                                option value="water" { (ui::t(lang, "expense.kind.water")) }
+                                option value="maintenance" { (ui::t(lang, "expense.kind.maintenance")) }
+                                option value="telecom" { (ui::t(lang, "expense.kind.telecom")) }
+                                option value="other" { (ui::t(lang, "expense.kind.other")) }
+                            }
+                        }
+                    }
+                    div.field-row {
+                        div {
+                            label for="amount" { (ui::t(lang, "expense.amount")) }
+                            input type="text" id="amount" name="amount" dir="ltr"
+                                  inputmode="decimal" placeholder="0.000";
+                        }
+                        div {
+                            label for="period" { (ui::t(lang, "expense.period")) }
+                            select id="period" name="period" {
+                                option value="month" { (ui::t(lang, "expense.period.month")) }
+                                option value="quarter" { (ui::t(lang, "expense.period.quarter")) }
+                                option value="year" { (ui::t(lang, "expense.period.year")) }
+                            }
+                        }
+                    }
+                    button.btn.btn-primary type="submit"
+                           style="margin-block-start:1rem" {
+                        (ui::t(lang, "expense.save"))
+                    }
+                }
+            }
+
+            @if rows.is_empty() {
+                div.card.card-pad { (ui::empty_state(ui::t(lang, "expense.empty"))) }
+            } @else {
+                div.card {
+                    table.list {
+                        thead {
+                            tr {
+                                th { (ui::t(lang, "expense.label")) }
+                                th { (ui::t(lang, "expense.period")) }
+                                th.money-cell { (ui::t(lang, "expense.amount")) }
+                                th.money-cell { (ui::t(lang, "expense.per_month")) }
+                                th { "" }
+                            }
+                        }
+                        tbody {
+                            @for row in &rows {
+                                tr class=(if row.active { "" } else { "row-off" }) {
+                                    td {
+                                        strong { (row.label) }
+                                        span.muted { " · " (kind_label(lang, &row.kind)) }
+                                    }
+                                    td { (period_label(lang, &row.period)) }
+                                    td.money-cell { (format_money(row.amount)) }
+                                    td.money-cell {
+                                        (format_money(row.amount / storage::period_months(&row.period)))
+                                    }
+                                    td {
+                                        @if row.active {
+                                            details.inline-edit {
+                                                summary { (ui::t(lang, "common.edit")) }
+                                                form method="post" action=(format!("/expenses/{}", row.id)) {
+                                                    div.field-row {
+                                                        div {
+                                                            label { (ui::t(lang, "expense.label")) }
+                                                            input type="text" name="label" value=(row.label);
+                                                        }
+                                                        div {
+                                                            label { (ui::t(lang, "expense.amount")) }
+                                                            input type="text" name="amount" dir="ltr"
+                                                                  inputmode="decimal"
+                                                                  value=(format_money(row.amount));
+                                                        }
+                                                    }
+                                                    div.field-row {
+                                                        div {
+                                                            label { (ui::t(lang, "expense.period")) }
+                                                            select name="period" {
+                                                                option value="month" selected[row.period == "month"] {
+                                                                    (ui::t(lang, "expense.period.month"))
+                                                                }
+                                                                option value="quarter" selected[row.period == "quarter"] {
+                                                                    (ui::t(lang, "expense.period.quarter"))
+                                                                }
+                                                                option value="year" selected[row.period == "year"] {
+                                                                    (ui::t(lang, "expense.period.year"))
+                                                                }
+                                                            }
+                                                        }
+                                                        div {
+                                                            label { (ui::t(lang, "expense.kind")) }
+                                                            select name="kind" {
+                                                                option value="rent" { (ui::t(lang, "expense.kind.rent")) }
+                                                                option value="power" { (ui::t(lang, "expense.kind.power")) }
+                                                                option value="water" { (ui::t(lang, "expense.kind.water")) }
+                                                                option value="maintenance" { (ui::t(lang, "expense.kind.maintenance")) }
+                                                                option value="telecom" { (ui::t(lang, "expense.kind.telecom")) }
+                                                                option value="other" { (ui::t(lang, "expense.kind.other")) }
+                                                            }
+                                                        }
+                                                    }
+                                                    button.btn.btn-primary type="submit" {
+                                                        (ui::t(lang, "common.save"))
+                                                    }
+                                                }
+                                            }
+                                            form method="post"
+                                                 action=(format!("/expenses/{}/stop", row.id)) {
+                                                button.btn.btn-ghost type="submit" {
+                                                    (ui::t(lang, "expense.stop"))
+                                                }
+                                            }
+                                        } @else {
+                                            span.pill.cancelled { (ui::t(lang, "expense.stopped")) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(ui::page(
+            &chrome(&conn, &headers, &user, Nav::Expenses, 0, ui::t(lang, "expense.title")),
+            body,
+        ))
+    })();
+
+    match result {
+        Ok(markup) => page_response(markup),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn expense_create(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<ExpenseForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let (label, kind, amount, period, note, start_day) = expense_from(&form);
+    match storage::create_expense(
+        &conn,
+        &user,
+        &label,
+        &kind,
+        amount,
+        &period,
+        &start_day,
+        note.as_deref(),
+    ) {
+        Ok(_) => Redirect::to("/expenses?done=expense").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn expense_update(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+    Form(form): Form<ExpenseForm>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    let (label, kind, amount, period, note, _start) = expense_from(&form);
+    match storage::update_expense(
+        &conn,
+        &user,
+        &path.id,
+        &label,
+        &kind,
+        amount,
+        &period,
+        note.as_deref(),
+    ) {
+        Ok(()) => Redirect::to("/expenses?done=expense_updated").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
+async fn expense_stop(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(path): Path<IdPath>,
+) -> Response {
+    let lang = lang_of(&headers);
+    let conn = state.db.lock().unwrap();
+    let Some(user) = user_of(&conn, &headers) else {
+        return Redirect::to("/login").into_response();
+    };
+    match storage::stop_expense(&conn, &user, &path.id) {
+        Ok(()) => Redirect::to("/expenses?done=expense_stopped").into_response(),
+        Err(err) => failure(lang, err),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Sales — the day book (reprint a ticket, see what was taken)
 // ---------------------------------------------------------------------------
@@ -1076,13 +1586,43 @@ async fn product_edit_page(
 
     let result = (|| -> Result<Markup> {
         let product = storage::get_product(&conn, &path.id)?;
+        let stats = storage::product_stats(&conn, &path.id)?;
+
         let body = html! {
             p { a href="/products" { "← " (ui::t(lang, "products.title")) } }
             h1 { (product.name) }
 
+            /* What this product actually did — the shop learns its own prices. */
+            div.card.card-pad style="margin-block-end:14px" {
+                @if stats.sales == 0 {
+                    p.muted style="margin:0" { (ui::t(lang, "product.never_sold")) }
+                } @else {
+                    div.cards-row style="margin:0" {
+                        div {
+                            div.muted { (ui::t(lang, "product.sold")) }
+                            div.big-money { (stats.sold_qty) }
+                        }
+                        div {
+                            div.muted { (ui::t(lang, "product.revenue")) }
+                            div.big-money { (ui::money_tnd(stats.revenue)) }
+                        }
+                        @if let Some(last) = &stats.last_sold {
+                            div {
+                                div.muted { (ui::t(lang, "product.last_sold")) }
+                                div.muted dir="ltr" {
+                                    (last.get(0..10).unwrap_or(last.as_str()))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             form.form-card method="post" action=(format!("/products/{}/edit", product.id)) {
                 label for="name" { (ui::t(lang, "common.name")) }
-                input type="text" id="name" name="name" value=(product.name) required autofocus;
+                input type="text" id="name" name="name" value=(product.name)
+                      placeholder=(ui::t(lang, "quick.name_hint")) autofocus;
+                p.muted style="margin:0" { (ui::t(lang, "quick.note")) }
 
                 label for="barcode" { (ui::t(lang, "products.barcode")) }
                 input type="text" id="barcode" name="barcode" dir="ltr"
@@ -1097,7 +1637,11 @@ async fn product_edit_page(
                       value=(format_money(product.cost));
 
                 div.muted style="margin-block-start:.5rem" {
-                    (ui::t(lang, "common.stock")) ": " (product.stock)
+                    @if product.counted {
+                        (ui::t(lang, "common.stock")) ": " (product.stock)
+                    } @else {
+                        (ui::t(lang, "product.not_counted"))
+                    }
                 }
 
                 button.btn.btn-primary.btn-block.btn-lg type="submit" style="margin-block-start:1rem" {

@@ -1350,3 +1350,80 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
   .card { border: 0; box-shadow: none; border-radius: 0; }
   .list td, .list th { padding: 3px 0; border-block-end: 1px dotted #bbb; }
 }
+
+/* --------------------------------------------------------------------------
+   14. Selling what the shop never entered (v1.0)
+   -------------------------------------------------------------------------- */
+
+/* the scan box: the barcode machine's landing strip, first in the cart */
+.scan-box {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 6px;
+}
+.scan-box input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 46px;
+  font-size: 1rem;
+  letter-spacing: .02em;
+}
+.scan-box .btn { flex: 0 0 auto; }
+.scan-hint {
+  margin: 0 14px 12px;
+  font-size: .78rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* unknown product: the code is the headline, the questions below */
+.quick-code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 10px 14px;
+  margin-block: 4px 16px;
+  border: 1px dashed var(--hair-strong, var(--hair));
+  border-radius: var(--r-12, 12px);
+  background: var(--sunken, transparent);
+  text-align: center;
+  unicode-bidi: isolate;
+}
+
+/* a price nobody set yet: say so, do not print 0.000 */
+.price.price-open {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* small stat blocks (product sheet, costs) */
+.cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.cards-row > div { min-inline-size: 96px; }
+.big-money {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+/* a stopped charge stays readable, never disappears */
+.row-off { opacity: .55; }
+.row-off strong { text-decoration: line-through; }
+
+details.inline-edit { margin-block-end: 8px; }
+details.inline-edit summary {
+  cursor: pointer;
+  font-size: .86rem;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+}
+details.inline-edit summary::-webkit-details-marker { display: none; }
+details.inline-edit .field-row { margin-block-start: 8px; }
+details.inline-edit button { margin-block-start: 8px; }

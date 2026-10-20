@@ -157,6 +157,7 @@ pub enum Nav {
     Sales,
     Products,
     Carnet,
+    Expenses,
     Settings,
 }
 
@@ -167,6 +168,7 @@ impl Nav {
             Nav::Sales => "/sales",
             Nav::Products => "/products",
             Nav::Carnet => "/carnet",
+            Nav::Expenses => "/expenses",
             Nav::Settings => "/settings",
         }
     }
@@ -177,6 +179,7 @@ impl Nav {
             Nav::Sales => "nav.sales",
             Nav::Products => "nav.products",
             Nav::Carnet => "nav.carnet",
+            Nav::Expenses => "nav.expenses",
             Nav::Settings => "nav.settings",
         }
     }
@@ -192,6 +195,56 @@ fn fr(key: &str) -> &'static str {
         "nav.sell" => "Vendre",
         "nav.products" => "Produits",
         "nav.sales" => "Ventes",
+        "nav.expenses" => "Charges",
+        "scan.placeholder" => "Scanner ou taper un code",
+        "scan.add" => "Ajouter",
+        "scan.hint" => "Produit inconnu ? On le crée en deux questions, sans quitter la vente.",
+        "quick.title" => "Produit inconnu — on l'ajoute ?",
+        "quick.intro" => "Ce code n'est pas encore dans le système. C'est normal : vous complétez quand vous avez le temps.",
+        "quick.name" => "Nom du produit (facultatif)",
+        "quick.name_hint" => "ex. Chargeur USB-C",
+        "quick.price" => "Prix de vente",
+        "quick.cost" => "Prix d'achat (facultatif)",
+        "quick.qty" => "Quantité",
+        "quick.add" => "Ajouter à la vente",
+        "quick.note" => "Le prix suffit : tout le reste peut rester vide et être complété plus tard.",
+        "quick.later" => "Plus tard",
+        "products.fills_itself" => "Votre stock se remplit tout seul : chaque produit scanné s'ajoute ici. Complétez les fiches quand vous avez un moment.",
+        "products.no_price" => "prix à définir",
+        "product.never_sold" => "Pas encore vendu. Son prix se précisera à la première vente.",
+        "product.sold" => "Quantité vendue",
+        "product.revenue" => "Total vendu",
+        "product.last_sold" => "Dernière vente",
+        "product.not_counted" => "Stock non compté — vous vendez sans inventaire.",
+        "expense.title" => "Charges du magasin",
+        "expense.intro" => "Loyer, eau, électricité, entretien : ce qui sort chaque mois.",
+        "expense.per_month" => "Par mois",
+        "expense.per_day" => "Par jour",
+        "expense.per_day_hint" => "Ce qu'il faut encaisser chaque jour pour les couvrir.",
+        "expense.add" => "Ajouter une charge",
+        "expense.label" => "Nom",
+        "expense.label_hint" => "ex. Loyer du local",
+        "expense.kind" => "Type",
+        "expense.kind.rent" => "Loyer",
+        "expense.kind.power" => "Électricité",
+        "expense.kind.water" => "Eau",
+        "expense.kind.maintenance" => "Entretien",
+        "expense.kind.telecom" => "Téléphone / Internet",
+        "expense.kind.other" => "Autre",
+        "expense.amount" => "Montant",
+        "expense.period" => "Périodicité",
+        "expense.period.month" => "Par mois",
+        "expense.period.quarter" => "Par trimestre",
+        "expense.period.year" => "Par an",
+        "expense.save" => "Enregistrer la charge",
+        "expense.empty" => "Aucune charge enregistrée. Ajoutez le loyer pour connaître votre coût réel.",
+        "expense.stop" => "Arrêter",
+        "expense.stopped" => "Arrêtée",
+        "toast.added" => "Ajouté à la vente",
+        "toast.expense" => "Charge ajoutée",
+        "toast.expense_updated" => "Charge modifiée",
+        "toast.expense_stopped" => "Charge arrêtée",
+        "common.edit" => "Modifier",
         "sales.one" => "Vente",
         "sales.back" => "Retour aux ventes",
         "sales.item" => "Article",
@@ -305,6 +358,59 @@ fn ar(key: &str) -> Option<&'static str> {
         "nav.sell" => "بيع",
         "nav.products" => "المنتجات",
         "nav.sales" => "المبيعات",
+        "nav.expenses" => "المصاريف",
+        "nav.session" => "الصندوق / Z",
+        "nav.journal" => "السجل",
+        "nav.menu" => "القائمة",
+        "scan.placeholder" => "امسح أو اكتب الرمز",
+        "scan.add" => "أضف",
+        "scan.hint" => "منتج غير معروف؟ ننشئه بسؤالين دون مغادرة البيعة.",
+        "quick.title" => "منتج غير معروف — نضيفوه؟",
+        "quick.intro" => "هذا الرمز موش موجود بعد. عادي: تكمّل وقت ما تفضى.",
+        "quick.name" => "اسم المنتج (اختياري)",
+        "quick.name_hint" => "مثال: شارجور USB-C",
+        "quick.price" => "سعر البيع",
+        "quick.cost" => "سعر الشراء (اختياري)",
+        "quick.qty" => "الكمية",
+        "quick.add" => "أضف إلى البيعة",
+        "quick.note" => "السعر يكفي: الباقي ينجم يبقى فارغ و يتكمّل من بعد.",
+        "quick.later" => "من بعد",
+        "products.fills_itself" => "مخزونك يتعبّى وحدو: كل منتج تمسحو يتزاد هنا. كمّل البطاقات وقت ما تلقى وقت.",
+        "products.no_price" => "السعر موش محدد",
+        "product.never_sold" => "ما تباعش بعد. السعر يتوضّح في أول بيعة.",
+        "product.sold" => "الكمية المبيوعة",
+        "product.revenue" => "مجموع المبيعات",
+        "product.last_sold" => "آخر بيعة",
+        "product.not_counted" => "المخزون موش محسوب — تبيع بلا جرد.",
+        "expense.title" => "مصاريف المحل",
+        "expense.intro" => "الكراء، الماء، الضو، الصيانة: اللي يخرج كل شهر.",
+        "expense.per_month" => "في الشهر",
+        "expense.per_day" => "في اليوم",
+        "expense.per_day_hint" => "اللي لازم تدخّلو كل يوم باش تغطّيهم.",
+        "expense.add" => "زيد مصروف",
+        "expense.label" => "الاسم",
+        "expense.label_hint" => "مثال: كراء المحل",
+        "expense.kind" => "النوع",
+        "expense.kind.rent" => "كراء",
+        "expense.kind.power" => "ضو",
+        "expense.kind.water" => "ماء",
+        "expense.kind.maintenance" => "صيانة",
+        "expense.kind.telecom" => "تلفون / أنترنت",
+        "expense.kind.other" => "آخر",
+        "expense.amount" => "المبلغ",
+        "expense.period" => "الدورية",
+        "expense.period.month" => "في الشهر",
+        "expense.period.quarter" => "في الثلاثية",
+        "expense.period.year" => "في السنة",
+        "expense.save" => "سجّل المصروف",
+        "expense.empty" => "ما فماش مصاريف مسجلة. زيد الكراء باش تعرف كلفتك الحقيقية.",
+        "expense.stop" => "وقّف",
+        "expense.stopped" => "متوقف",
+        "toast.added" => "تزاد في البيعة",
+        "toast.expense" => "تزاد مصروف",
+        "toast.expense_updated" => "تبدّل المصروف",
+        "toast.expense_stopped" => "توقف المصروف",
+        "common.edit" => "تعديل",
         "sales.one" => "بيعة",
         "sales.back" => "رجوع إلى المبيعات",
         "sales.item" => "المادة",
@@ -415,6 +521,59 @@ fn en(key: &str) -> Option<&'static str> {
         "nav.sell" => "Sell",
         "nav.products" => "Products",
         "nav.sales" => "Sales",
+        "nav.expenses" => "Costs",
+        "nav.session" => "Till / Z",
+        "nav.journal" => "Journal",
+        "nav.menu" => "Menu",
+        "scan.placeholder" => "Scan or type a code",
+        "scan.add" => "Add",
+        "scan.hint" => "Unknown item? We create it in two questions, without leaving the sale.",
+        "quick.title" => "Unknown item — add it?",
+        "quick.intro" => "This code is not in the system yet. That is normal: fill it in when you have time.",
+        "quick.name" => "Item name (optional)",
+        "quick.name_hint" => "e.g. USB-C charger",
+        "quick.price" => "Selling price",
+        "quick.cost" => "Purchase price (optional)",
+        "quick.qty" => "Quantity",
+        "quick.add" => "Add to the sale",
+        "quick.note" => "The price is enough: everything else can stay empty and be completed later.",
+        "quick.later" => "Later",
+        "products.fills_itself" => "Your stock fills itself: every scanned item is added here. Complete the sheets whenever you have a moment.",
+        "products.no_price" => "price to set",
+        "product.never_sold" => "Not sold yet. Its price will settle on the first sale.",
+        "product.sold" => "Quantity sold",
+        "product.revenue" => "Total sold",
+        "product.last_sold" => "Last sale",
+        "product.not_counted" => "Stock not counted — you sell without an inventory.",
+        "expense.title" => "Shop costs",
+        "expense.intro" => "Rent, water, power, maintenance: what leaves every month.",
+        "expense.per_month" => "Per month",
+        "expense.per_day" => "Per day",
+        "expense.per_day_hint" => "What you must take every day to cover them.",
+        "expense.add" => "Add a cost",
+        "expense.label" => "Name",
+        "expense.label_hint" => "e.g. Shop rent",
+        "expense.kind" => "Type",
+        "expense.kind.rent" => "Rent",
+        "expense.kind.power" => "Power",
+        "expense.kind.water" => "Water",
+        "expense.kind.maintenance" => "Maintenance",
+        "expense.kind.telecom" => "Phone / Internet",
+        "expense.kind.other" => "Other",
+        "expense.amount" => "Amount",
+        "expense.period" => "Frequency",
+        "expense.period.month" => "Per month",
+        "expense.period.quarter" => "Per quarter",
+        "expense.period.year" => "Per year",
+        "expense.save" => "Save the cost",
+        "expense.empty" => "No cost recorded. Add the rent to know your real cost.",
+        "expense.stop" => "Stop",
+        "expense.stopped" => "Stopped",
+        "toast.added" => "Added to the sale",
+        "toast.expense" => "Cost added",
+        "toast.expense_updated" => "Cost updated",
+        "toast.expense_stopped" => "Cost stopped",
+        "common.edit" => "Edit",
         "sales.one" => "Sale",
         "sales.back" => "Back to sales",
         "sales.item" => "Item",
@@ -565,6 +724,11 @@ impl Nav {
             Nav::Products => &[
                 "M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6L12 3.2Z",
                 "M4 7.6 12 12l8-4.4", "M12 12v8.8",
+            ],
+            Nav::Expenses => &[
+                "M3.5 7.5h17v9h-17z",
+                "M12 14.4a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z",
+                "M6.6 10v4M17.4 10v4",
             ],
             Nav::Settings => &[
                 "M4 7h9", "M19 7h1", "M4 17h5", "M15 17h5",
@@ -725,6 +889,7 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                                     (icon_journal())
                                     span.nav-label { (t(lang, "nav.journal")) }
                                 }
+                                (item(Nav::Expenses, None))
                                 (item(Nav::Settings, None))
                             }
                         }
@@ -753,6 +918,7 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                                     }
                                     a href="/session" { (t(lang, "nav.session")) }
                                     a href="/journal" { (t(lang, "nav.journal")) }
+                                    a href="/expenses" { (t(lang, "nav.expenses")) }
                                     a href="/settings" { (t(lang, "nav.settings")) }
                                     @if chrome.user.is_some() {
                                         form method="post" action="/logout" {
@@ -878,6 +1044,8 @@ pub struct ProductView<'a> {
     pub name: &'a str,
     pub price: i64,
     pub stock: i64,
+    /// false = the shop never counted this item: say nothing about stock.
+    pub counted: bool,
 }
 
 /// The whole card is the button: one tap adds the product (DESIGN-002 R2).
@@ -889,16 +1057,23 @@ pub fn product_card(product: &ProductView<'_>) -> Markup {
         .filter_map(|word| word.chars().next())
         .map(|c| c.to_uppercase().to_string())
         .collect();
-    let low = product.stock <= 0;
+    let low = product.counted && product.stock <= 0;
+    let no_price = product.price <= 0;
     html! {
         form method="post" action="/cart/add" {
             input type="hidden" name="product_id" value=(product.id);
             button.product type="submit" {
                 div.thumb { (initial) }
                 div.name { (product.name) }
-                div.price { (money(product.price)) }
-                div class=(if low { "stock low" } else { "stock" }) {
-                    @if low { "Rupture" } @else { (product.stock) " en stock" }
+                @if no_price {
+                    div.price.price-open { "prix à définir" }
+                } @else {
+                    div.price { (money(product.price)) }
+                }
+                @if product.counted {
+                    div class=(if low { "stock low" } else { "stock" }) {
+                        @if low { "Rupture" } @else { (product.stock) " en stock" }
+                    }
                 }
             }
         }
