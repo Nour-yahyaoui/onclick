@@ -45,12 +45,16 @@ jobs:
             cp build.log failed-build.log
             # GitHub keeps only 10 annotations per step: send the *real* errors,
             # one per line, never the whole log.
-            grep -nE "^error(\[[A-Z0-9]+\])?:|test result: FAILED|panicked at|assertion .* failed|^---- " build.log \
-              | head -8 > errors.txt || true
-            if [ ! -s errors.txt ]; then tail -8 build.log > errors.txt; fi
-            sed 's/\x1b\[[0-9;]*m//g' errors.txt | while IFS= read -r line; do
-              echo "::error::$line"
-            done
+            # One annotation per error, with a few following lines glued in:
+            # the bare "trait bound is not satisfied" never explains itself.
+            awk '/^error(\[[A-Z0-9]+\])?:/ {ctx=NR+5} ctx>=NR {printf "%s | ", $0} /^error(\[[A-Z0-9]+\])?:/ {print ""}' build.log \
+              | sed 's/\x1b\[[0-9;]*m//g' | head -6 > errors.txt || true
+            if [ ! -s errors.txt ]; then
+              grep -nE "test result: FAILED|panicked at|assertion .* failed|^---- " build.log \
+                | head -6 > errors.txt || true
+            fi
+            if [ ! -s errors.txt ]; then tail -6 build.log > errors.txt; fi
+            while IFS= read -r line; do echo "::error::$line"; done < errors.txt
             exit 1
           fi
 
