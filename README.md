@@ -5,7 +5,7 @@ Local-first POS for phone & accessories shops. **One binary, works offline, in F
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
 
 Planning and decisions live in [`PLAN.md`](PLAN.md) and [`docs/`](docs/README.md).
-Current version: **v0.5.7** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
+Current version: **v0.5.8** — a till you can run a full day on, plus the cloud half that starts as soon as you give it a `DATABASE_URL`.
 
 ---
 
@@ -180,6 +180,7 @@ without a developer: the **menu** (… → bottom line) shows `OneClick 0.5.6`, 
 
 | Version | What landed |
 |---|---|
+| **v0.5.8** | Visible drag handle for the sidebar (replaces the invisible CSS grip), a real fold/unfold chevron, no scrollbar inside the rail |
 | **v0.5.7** | **Blank-page fix** (one grid column for two children), resizable sidebar, collapsible to an icon rail with every icon kept, nav icons |
 | **v0.5.6** | Login hint removed; the failed-login screen reuses the same card; version shown in the menu and via `store --version` |
 | **v0.5.5** | Build fixes: restored `LoginForm`, `Option<Markup>` no longer rendered bare, `pos_body` signature cleaned; linter now also catches bare `Option` renders |

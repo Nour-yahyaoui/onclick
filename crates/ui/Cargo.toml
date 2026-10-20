@@ -1,6 +1,6 @@
 [package]
 name = "ui"
-version = "0.5.7"
+version = "0.5.8"
 edition = "2021"
 description = "maud components, i18n, layout. No .html files (ADR-014)."
 

@@ -157,8 +157,7 @@ a:hover { text-decoration: underline; }
   max-inline-size: 420px;
   block-size: 100dvh;
   padding: 16px 14px;
-  /* drag the inner edge to resize (Chromium); width is remembered by script */
-  resize: horizontal;
+  /* the visible grip on the inner edge does the resizing */
   overflow: hidden;
   background: var(--surface);
   border-inline-end: 1px solid var(--hair);
@@ -188,13 +187,21 @@ a:hover { text-decoration: underline; }
   margin-inline-start: auto;
   display: grid;
   place-items: center;
-  inline-size: 30px;
-  block-size: 30px;
-  border-radius: 8px;
-  color: var(--muted);
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--hair);
+  background: var(--surface);
+  color: var(--ink-2);
   flex: none;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
-.side-toggle:hover { background: var(--surface-3); color: var(--ink); text-decoration: none; }
+.side-toggle:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  text-decoration: none;
+}
 .side-toggle .nav-icon { inline-size: 17px; block-size: 17px; }
 .brand:hover { text-decoration: none; }
 
@@ -274,9 +281,13 @@ a:hover { text-decoration: underline; }
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   margin-block: 2px;
   padding-block-end: 4px;
 }
+
+.side-nav::-webkit-scrollbar { inline-size: 0; block-size: 0; }
 
 .nav-group { display: grid; gap: 2px; }
 
@@ -335,6 +346,27 @@ a:hover { text-decoration: underline; }
   font-weight: 800;
 }
 
+.side-grip {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+.side-grip::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: 2px;
+  background: var(--hair);
+  transition: background .15s ease;
+}
+.side-grip:hover::after,
+.side-grip:focus-visible::after { background: var(--accent); }
+
 /* ---- collapsed: an icon rail, nothing lost ---- */
 
 .shell.collapsed { --side-w: 76px; }
@@ -342,7 +374,6 @@ a:hover { text-decoration: underline; }
 .shell.collapsed .sidebar {
   inline-size: 76px;
   padding-inline: 10px;
-  resize: none;
   align-items: center;
 }
 .shell.collapsed .brand { padding: 0; }
@@ -393,6 +424,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 8px;
 }
+.shell.collapsed .side-grip { display: none; }
 .shell.collapsed .menu { margin-inline-start: 0; }
 
 /* the rail clips its own overflow (resize needs it), so the menu escapes it */
@@ -1235,6 +1267,7 @@ input[dir="ltr"] { font-variant-numeric: tabular-nums; }
   .brand-name { max-inline-size: 30vw; }
   .quick-sell { min-block-size: 40px; inline-size: auto; }
   .side-search { order: 3; inline-size: 100%; }
+  .side-grip { display: none; }
   .side-nav {
     order: 4;
     inline-size: 100%;

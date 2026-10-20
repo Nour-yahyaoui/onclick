@@ -21,16 +21,47 @@ const SIDEBAR_JS: &str = r#"
   try {
     var shell = document.querySelector('.shell');
     var bar = document.querySelector('.sidebar');
+    var grip = document.querySelector('.side-grip');
     if (!shell || !bar) return;
-    var saved = localStorage.getItem('oneclick.side');
-    if (saved && !shell.classList.contains('collapsed')) {
-      bar.style.setProperty('inline-size', saved + 'px');
+
+    var saved = parseInt(localStorage.getItem('oneclick.side'), 10);
+    if (saved >= 90 && saved <= 440) shell.style.setProperty('--side-w', saved + 'px');
+
+    if (!grip) return;
+    var rtl = getComputedStyle(shell).direction === 'rtl';
+    var dragging = false;
+
+    function widthAt(clientX) {
+      var r = bar.getBoundingClientRect();
+      return rtl ? r.right - clientX : clientX - r.left;
     }
-    bar.addEventListener('pointerup', function () {
+
+    grip.addEventListener('pointerdown', function (e) {
       if (shell.classList.contains('collapsed')) return;
-      var px = Math.round(bar.getBoundingClientRect().width);
-      if (px > 90 && px < 440) localStorage.setItem('oneclick.side', px);
+      dragging = true;
+      grip.setPointerCapture(e.pointerId);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
     });
+
+    grip.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var w = Math.max(90, Math.min(440, widthAt(e.clientX)));
+      shell.style.setProperty('--side-w', w + 'px');
+    });
+
+    function stop() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      var w = Math.round(bar.getBoundingClientRect().width);
+      try { localStorage.setItem('oneclick.side', w); } catch (err) {}
+    }
+
+    grip.addEventListener('pointerup', stop);
+    grip.addEventListener('pointercancel', stop);
   } catch (e) {}
 })();
 "#;
@@ -165,6 +196,8 @@ fn fr(key: &str) -> &'static str {
         "nav.search" => "Chercher ou scanner…",
         "nav.group_sell" => "Caisse",
         "nav.collapse" => "Réduire le menu",
+        "nav.expand" => "Ouvrir le menu",
+        "nav.resize" => "Redimensionner le menu",
         "nav.group_manage" => "Gestion",
         "nav.carnet" => "Carnet",
         "nav.settings" => "Réglages",
@@ -253,6 +286,8 @@ fn ar(key: &str) -> Option<&'static str> {
         "nav.search" => "ابحث أو امسح…",
         "nav.group_sell" => "الصندوق",
         "nav.collapse" => "تصغير القائمة",
+        "nav.expand" => "فتح القائمة",
+        "nav.resize" => "تغيير عرض القائمة",
         "nav.group_manage" => "الإدارة",
         "nav.carnet" => "الديون",
         "nav.settings" => "الإعدادات",
@@ -338,6 +373,8 @@ fn en(key: &str) -> Option<&'static str> {
         "nav.search" => "Search or scan…",
         "nav.group_sell" => "Till",
         "nav.collapse" => "Collapse menu",
+        "nav.expand" => "Expand menu",
+        "nav.resize" => "Resize menu",
         "nav.group_manage" => "Manage",
         "nav.carnet" => "Debts",
         "nav.settings" => "Settings",
@@ -505,6 +542,18 @@ pub fn icon_journal() -> Markup {
     }
 }
 
+/// Fold / unfold arrow for the sidebar toggle.
+pub fn icon_chevron(point_start: bool) -> Markup {
+    let d = if point_start { "M14.5 6.5 9 12l5.5 5.5" } else { "M9.5 6.5 15 12l-5.5 5.5" };
+    html! {
+        svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            "stroke-width"=(2) "stroke-linecap"="round" "stroke-linejoin"="round"
+            aria-hidden="true" {
+            path d=(d);
+        }
+    }
+}
+
 pub fn icon_panel() -> Markup {
     html! {
         svg.nav-icon viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -543,6 +592,7 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
     };
 
     let side_class = if chrome.collapsed { "shell collapsed" } else { "shell" };
+    let toggle_key = if chrome.collapsed { "nav.expand" } else { "nav.collapse" };
 
     html! {
         (DOCTYPE)
@@ -567,10 +617,11 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                                     }
                                 }
                             }
-                            /* collapse / expand — the rail keeps every icon */
-                            a.side-toggle href="/sidebar" title=(t(lang, "nav.collapse"))
-                              aria-label=(t(lang, "nav.collapse")) {
-                                (icon_panel())
+                            /* collapse / expand — the arrow shows which way it will move */
+                            a.side-toggle href="/sidebar" title=(t(lang, toggle_key))
+                              aria-label=(t(lang, toggle_key))
+                              aria-expanded=(if chrome.collapsed { "false" } else { "true" }) {
+                                (icon_chevron((lang == Lang::Ar) != chrome.collapsed))
                             }
                         }
 
@@ -608,6 +659,10 @@ pub fn page(chrome: &Chrome, body: Markup) -> Markup {
                                 (item(Nav::Settings, None))
                             }
                         }
+
+                        /* drag handle for resizing — a visible line, not a hidden corner */
+                        div.side-grip role="separator" aria-orientation="vertical"
+                            aria-label=(t(lang, "nav.resize")) {}
 
                         div.side-foot {
                             a.icon-btn href=(format!("/lang/{}", next_lang(lang).code()))
