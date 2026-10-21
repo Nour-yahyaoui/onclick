@@ -1,5 +1,6 @@
 # OneClick — caisse & gestion de magasin
 
+
 Local-first POS for phone & accessories shops. **One binary, works offline, in French / Arabic / English.**
 
 > « Il enregistre tout, chaque dinar. Il n'exige rien. » — *records every dinar, demands nothing.*
